@@ -1,0 +1,39 @@
+{
+  "name": "benar",
+  "productName": "Benar",
+  "version": "0.1.0",
+  "description": "A Mac desktop app that makes and edits manual-1 ground-truth files.",
+  "private": true,
+  "type": "module",
+  "main": ".vite/build/main.cjs",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "install:app": "node scripts/install-app.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "verify": "pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^8.0.1",
+    "@electron-forge/plugin-vite": "^8.0.1",
+    "@electron-forge/shared-types": "^8.0.1",
+    "@fontsource-variable/jetbrains-mono": "5.3.0",
+    "@fontsource-variable/manrope": "5.3.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "^22.13.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "electron": "^44.5.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

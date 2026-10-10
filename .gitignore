@@ -1,0 +1,6 @@
+*.truth.json
+*.docx
+node_modules/
+out/
+.vite/
+.DS_Store

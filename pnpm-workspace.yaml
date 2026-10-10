@@ -1,0 +1,8 @@
+# Electron Forge packages with pnpm only when a hoist pattern is set.
+hoistPattern:
+  - '*'
+
+# pnpm stops an install on a build script that is not listed here.
+allowBuilds:
+  electron: true
+  esbuild: true
