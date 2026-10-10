@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, protocol, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, type IpcMainInvokeEvent } from 'electron';
+
+import { CHANNEL } from '../shared/bridge';
+import { splitPath } from '../shared/target';
+import { readTruth, saveTruth, targetState } from './files';
+import { installMenu } from './menu';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -81,6 +86,10 @@ function blockRequests(): void {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 }
 
+let mainWindow: BrowserWindow | null = null;
+/** The renderer says when the form has unsaved changes. */
+let dirty = false;
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1100,
@@ -96,15 +105,87 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
+  mainWindow = window;
+  dirty = false;
   // The window opens no other window and goes to no other page.
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event) => event.preventDefault());
+  // The main process asks before the window closes with unsaved changes.
+  window.on('close', (event) => {
+    if (!dirty) return;
+    const choice = dialog.showMessageBoxSync(window, {
+      type: 'warning',
+      message: 'The form has unsaved changes.',
+      detail: 'If you close the window, the changes are lost.',
+      buttons: ['Cancel', 'Close and lose the changes'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (choice === 0) event.preventDefault();
+  });
+  window.on('closed', () => {
+    mainWindow = null;
+  });
   void window.loadURL(DEV_URL ?? `${APP_ORIGIN}/index.html`);
+}
+
+// A call is served only when it comes from the page of the app.
+function fromApp(event: IpcMainInvokeEvent): boolean {
+  const url = event.senderFrame?.url ?? '';
+  return url.startsWith(`${APP_ORIGIN}/`) || (DEV_URL !== undefined && url.startsWith(DEV_URL));
+}
+
+const isText = (value: unknown): value is string => typeof value === 'string';
+
+function serveBridge(): void {
+  ipcMain.handle(CHANNEL.pickFolder, async (event) => {
+    if (!fromApp(event) || !mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
+
+  // The path only: the app does not open the Word file.
+  ipcMain.handle(CHANNEL.pickWordFile, async (event) => {
+    if (!fromApp(event) || !mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'Word documents', extensions: ['docx'] }],
+    });
+    const file = result.filePaths[0];
+    return result.canceled || !file ? null : splitPath(file);
+  });
+
+  ipcMain.handle(CHANNEL.openTruth, async (event) => {
+    if (!fromApp(event) || !mainWindow) return null;
+    const result = await dialog.showOpenDialog(mainWindow, {
+      properties: ['openFile'],
+      filters: [{ name: 'Ground-truth files', extensions: ['json'] }],
+    });
+    const file = result.filePaths[0];
+    if (result.canceled || !file) return null;
+    return (await readTruth(file)) ?? { ...splitPath(file), json: null };
+  });
+
+  ipcMain.handle(CHANNEL.targetState, async (event, folder: unknown, stem: unknown) => {
+    if (!fromApp(event) || !isText(folder) || !isText(stem)) return { folderExists: false, truthExists: false, wordFileExists: false };
+    return targetState(folder, stem);
+  });
+
+  ipcMain.handle(CHANNEL.saveTruth, async (event, folder: unknown, stem: unknown, json: unknown, replace: unknown) => {
+    if (!fromApp(event) || !isText(folder) || !isText(stem) || !isText(json)) return { ok: false, reason: 'failed' };
+    return saveTruth(folder, stem, json, replace === true);
+  });
+
+  ipcMain.on(CHANNEL.setDirty, (event, value: unknown) => {
+    if (event.sender === mainWindow?.webContents) dirty = value === true;
+  });
 }
 
 void app.whenReady().then(() => {
   serveAppFiles();
   blockRequests();
+  serveBridge();
+  installMenu(() => mainWindow);
   createWindow();
 });
 
