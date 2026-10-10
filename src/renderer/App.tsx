@@ -1,14 +1,19 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 
 import type { TargetState } from '../shared/bridge';
+import { serialise } from '../shared/serialise';
 import { cleanStem } from '../shared/target';
 import { validate, type Problem } from '../shared/validate';
 import { FILE_KEY, type ProblemMap } from './components/ui';
 import { AlwaysKeep } from './sections/AlwaysKeep';
 import { Contacts } from './sections/Contacts';
 import { FileSection } from './sections/FileSection';
+import { Footer } from './sections/Footer';
+import { JsonPanel } from './sections/JsonPanel';
 import { Others } from './sections/Others';
 import { Parties } from './sections/Parties';
+import { Redact } from './sections/Redact';
+import { TextList } from './sections/TextList';
 import { TopBar } from './sections/TopBar';
 import { initialState, isDirty, reducer } from './state';
 
@@ -47,6 +52,7 @@ export function App() {
   const found = useTargetState(folder, stem);
   const problems = useMemo(() => validate(form, { folder, stem, folderExists: found.folderExists, wordFileExists: found.wordFileExists }), [form, folder, stem, found]);
   const problemMap = useMemo(() => byRow(problems), [problems]);
+  const json = useMemo(() => serialise(form), [form]);
   const dirty = isDirty(state);
 
   useEffect(() => window.benar.setDirty(dirty), [dirty]);
@@ -67,8 +73,13 @@ export function App() {
           </div>
           <Others {...section} />
           <AlwaysKeep {...section} />
+          <Redact {...section} knownEntities={state.knownEntities} fillNote={state.fillNote} />
+          <TextList list="keep" {...section} />
+          <TextList list="ownTitles" {...section} />
+          <JsonPanel json={json} />
         </div>
       </main>
+      <Footer problems={problems} />
     </div>
   );
 }

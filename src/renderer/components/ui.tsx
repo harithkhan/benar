@@ -20,8 +20,11 @@ interface FieldLook {
   compact?: boolean;
 }
 
-const fieldClass = ({ invalid, mono, accent, compact }: FieldLook, extra?: string): string =>
-  cx(FIELD, invalid ? 'border-danger' : 'border-line-strong', accent ? 'text-accent-text' : 'text-ink', (mono || accent) && 'font-mono', compact || mono || accent ? 'text-sm' : 'text-body', compact ? 'h-8 py-1' : 'h-11 py-2', extra);
+const fieldClass = ({ invalid, mono, accent, compact }: FieldLook, size: string, extra?: string): string =>
+  cx(FIELD, invalid ? 'border-danger' : 'border-line-strong', accent ? 'text-accent-text' : 'text-ink', (mono || accent) && 'font-mono', compact || mono || accent ? 'text-sm' : 'text-body', size, extra);
+
+/** A control of one line is 44px tall, and 32px tall in a row of a table. */
+const lineSize = (compact?: boolean): string => (compact ? 'h-8 py-1' : 'h-11 py-2');
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & FieldLook & { value: string; onChange: (value: string) => void };
 
@@ -35,7 +38,7 @@ export function Input({ value, onChange, invalid, mono, accent, compact, classNa
       value={value}
       aria-invalid={invalid || undefined}
       onChange={(event) => onChange(event.target.value)}
-      className={fieldClass({ invalid, mono, accent, compact }, className)}
+      className={fieldClass({ invalid, mono, accent, compact }, lineSize(compact), className)}
     />
   );
 }
@@ -51,7 +54,7 @@ export function TextArea({ value, onChange, invalid, mono, accent, compact, clas
       value={value}
       aria-invalid={invalid || undefined}
       onChange={(event) => onChange(event.target.value)}
-      className={cx(fieldClass({ invalid, mono, accent, compact }, className), 'h-auto min-h-8 resize-y leading-snug', compact ? 'py-1.5' : 'py-2')}
+      className={fieldClass({ invalid, mono, accent, compact }, cx('min-h-8 resize-y leading-snug', compact ? 'py-1.5' : 'py-2'), className)}
     />
   );
 }
@@ -73,7 +76,7 @@ export function Select({ value, options, onChange, invalid, mono, accent, compac
   // A loaded file can hold a value that is not permitted. It shows as it is.
   const known = options.some((option) => option.value === value);
   return (
-    <select {...rest} value={value} aria-invalid={invalid || undefined} onChange={(event) => onChange(event.target.value)} className={fieldClass({ invalid, mono, accent, compact }, cx('pr-7', className))}>
+    <select {...rest} value={value} aria-invalid={invalid || undefined} onChange={(event) => onChange(event.target.value)} className={fieldClass({ invalid, mono, accent, compact }, lineSize(compact), cx('pr-7', className))}>
       {!known && <option value={value}>{value === '' ? 'Not selected' : `${value} · not permitted`}</option>}
       {options.map((option) => (
         <option key={option.value} value={option.value}>
