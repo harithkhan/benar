@@ -1,21 +1,27 @@
 @import 'tailwindcss';
 @config '../../tailwind.config.js';
 
-:root {
-  color-scheme: dark;
-}
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
 
-html,
-body,
-#root {
-  height: 100%;
-}
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
 
-body {
-  @apply m-0 bg-chrome font-sans text-body text-ink antialiased;
-}
+  body {
+    @apply m-0 bg-chrome font-sans text-body text-ink antialiased;
+  }
 
-/* A focus ring is visible on each control. */
-:focus-visible {
-  @apply outline-2 outline-offset-2 outline-accent;
+  /* A focus ring is visible on each control. A field shows a ring of its own. */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-accent;
+  }
+
+  ::selection {
+    @apply bg-accent/40;
+  }
 }

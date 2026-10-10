@@ -1,0 +1,33 @@
+import type { Code } from '../shared/validate';
+
+// The text of each problem. A message names the kind of problem only.
+export const MESSAGE: Record<Code, string> = {
+  'party-label-empty': 'Give the party a label.',
+  'party-label-bracket': 'A label cannot have a square bracket inside it.',
+  'party-label-duplicate': 'Another party has this label.',
+  'party-type': 'This type is not a permitted value. Select a type.',
+  'party-no-name': 'The party has no full name.',
+  'contact-unknown-party': 'The file names a party that is not in Parties. Select a party or No party.',
+  'other-type': 'This type is not a permitted value. Select a type.',
+  'of-not-id-type': 'Only an NRIC, a passport, a company number or a professional number can belong to an entry.',
+  'of-self': 'An entry cannot belong to itself.',
+  'of-missing': 'The file gives an owner that is not in the list. Select an owner or No owner.',
+  'of-owner-type': 'The owner must be a party, a person, a child or a company.',
+  'of-owner-has-of': 'The owner cannot belong to another entry.',
+  'other-label-empty': 'The role label of the file is empty. Type a label, or click the field and leave it to remove the label.',
+  'other-label-bracket': 'A label cannot have a square bracket inside it.',
+  'other-label-is-party': 'This label is the label of a party.',
+  'other-label-shared': 'Entries that share a label must have the same type, and none of them can have an owner.',
+  'redact-text-empty': 'Type the text, or remove the row.',
+  'redact-entity-empty': 'Give the row an entity id.',
+  'redact-expect': 'Select entered or detected.',
+  'redact-type': 'This type is not a permitted value. Select a type.',
+  'redact-duplicate': 'An earlier row has the same text.',
+  'redact-defined-term': 'This text is the defined term of a party. A defined term does not go in Redact.',
+  'target-folder-empty': 'Select the folder.',
+  'target-name-empty': 'Type the name of the file.',
+  'target-name-bad': 'The name cannot have a slash in it.',
+  'target-folder-missing': 'This folder does not exist.',
+  'no-word-file': 'No Word file with this name is in the folder. eval does not score such a file.',
+  'batch-empty': 'The batch value is empty.',
+};
