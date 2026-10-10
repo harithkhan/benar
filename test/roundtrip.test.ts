@@ -4,6 +4,7 @@ import { emptyForm } from '../src/shared/model';
 import { parse } from '../src/shared/parse';
 import { NOT_MANUAL_MESSAGE } from '../src/shared/schema';
 import { serialise } from '../src/shared/serialise';
+import { validate, type TargetInfo } from '../src/shared/validate';
 import { EXAMPLE, example, text } from './example';
 
 function load(value: unknown) {
@@ -269,6 +270,31 @@ describe('a loaded file', () => {
       { type: 'person', text: 'Siti binti Hassan' },
       { type: 'nric', text: '900101-01-1234' },
     ]);
+  });
+
+  test('an empty label on an entry of others loads as an empty label, is an error, and is written as []', () => {
+    const file = example();
+    file.intake.others = [{ type: 'person', text: 'Siti binti Hassan', label: '' }];
+    const state = load(file);
+    // An empty label is a label. It is not the same as no label.
+    expect(state.others[0]!.label).toBe('');
+    const target: TargetInfo = { folder: '/scratch/matter-1', stem: 'statement', folderExists: true, wordFileExists: true };
+    expect(validate(state, target)).toEqual([{ level: 'error', section: 'others', rowId: state.others[0]!.id, code: 'other-label-empty' }]);
+    const out = serialise(state);
+    expect(out).toContain('"label": "[]"');
+    expect(JSON.parse(out).intake.others).toEqual([{ type: 'person', text: 'Siti binti Hassan', label: '[]' }]);
+  });
+
+  test('an empty type on a redact row loads as no type, and the key is left out', () => {
+    const file = example();
+    file.redact[4].type = '';
+    const state = load(file);
+    expect(state.redact[4]!.type).toBe('');
+    const out = JSON.parse(serialise(state));
+    expect(Object.keys(out.redact[4])).toEqual(['text', 'entity', 'expect']);
+    expect(out.redact[4]).toEqual({ text: 'Rajesh a/l Muniandy', entity: 'w-rajesh', expect: 'detected' });
+    // The other rows keep their type.
+    expect(Object.keys(out.redact[3])).toEqual(['text', 'entity', 'expect', 'type']);
   });
 
   test('a label that is null on an address stays as loaded', () => {

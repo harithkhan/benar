@@ -34,7 +34,7 @@ benar/
   tailwind.preset.js  tailwind.config.js
   scripts/install-app.mjs
   src/shared/    schema.ts  model.ts  serialise.ts  parse.ts  validate.ts  fill.ts  target.ts  bridge.ts
-  src/main/      main.ts  files.ts  menu.ts
+  src/main/      main.ts  files.ts  menu.ts  policy.ts
   src/preload/   preload.ts
   src/renderer/  index.html  main.tsx  App.tsx  style.css  state.ts  messages.ts  bridge.d.ts  components/ui.tsx  sections/*.tsx  sections/shared.ts
   test/          *.test.ts  example.ts
@@ -142,7 +142,7 @@ A label is compared in this form: trim, remove one `[` at the start and one `]` 
 - A `redact` text is the `definedTerm` of a party.
 - No `<name>.docx` is in the target folder. `eval` does not score such a file.
 - A party has no `fullName`.
-- `Add rows from intake` (section 5) gives the same entity id to two rows of `intake` that are not one person or thing (for example a party and the ID number of another party; a row with a label error does not count, nor does a row that takes its entity id from it), or a label gives an empty slug.
+- `Add rows from intake` (section 5) gives the same entity id to two rows of `intake` that are not one person or thing (for example a party and the ID number of another party; a row with a label error does not count, nor does a row that takes its entity id from it; a row with an empty text counts too, because the ids depend on the intake only), or a label gives an empty slug.
 
 ### 4.5 A loaded file
 
@@ -173,7 +173,7 @@ The ids depend on the intake only. So two files of one matter with the same inta
 
 ## 6. The main process and the bridge
 
-Window: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. Content policy `default-src 'self'`. The session cancels each request that is not for the app's own files (and the Vite dev server in `start`). No inline style. In `start` only, the policy also permits inline code and the socket of the Vite dev server.
+Window: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. Content policy `default-src 'self'`. The session cancels each request that is not for the app's own files (and the Vite dev server in `start`). No inline style. In `start` only, the policy also permits inline code and inline style, and the socket of the Vite dev server.
 
 The preload gives the renderer these functions only:
 
@@ -185,6 +185,8 @@ The preload gives the renderer these functions only:
 | `targetState(folder, stem)` | Returns `{ folderExists, truthExists, wordFileExists }` |
 | `saveTruth(folder, stem, json, replace)` | Writes `<stem>.truth.json.tmp` in the folder, then renames it. Refuses when the file exists and `replace` is false |
 | `setDirty(dirty)` | The main process asks before the window closes with unsaved changes |
+
+macOS keeps the last folder of a file dialog in the preferences of the app. The app removes that entry at the start, after each file dialog closes and before the app quits. The next dialog starts in the folder of the last pick, which the app holds in memory only.
 
 Menu: File with New (Cmd+N), Open… (Cmd+O), New from a file of the same matter… (Shift+Cmd+N), Save (Cmd+S); the standard Edit and Window menus.
 

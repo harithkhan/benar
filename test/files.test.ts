@@ -69,6 +69,19 @@ describe('saveTruth', () => {
     expect(await saveTruth('relative/folder', 'statement', JSON_TEXT, true)).toEqual({ ok: false, reason: 'no-folder' });
   });
 
+  test('a folder text with a slash at its end gives the same file', async () => {
+    const target = path.join(folder, 'statement.truth.json');
+    expect(await saveTruth(`${folder}/`, 'statement', '{"first":true}\n', false)).toEqual({ ok: true });
+    expect(vi.mocked(rename).mock.calls).toEqual([[`${target}.tmp`, target]]);
+    expect(await readdir(folder)).toEqual(['statement.truth.json']);
+    // The file is there for the folder text with the slash, and for the one without it.
+    expect(await saveTruth(`${folder}/`, 'statement', JSON_TEXT, false)).toEqual({ ok: false, reason: 'exists' });
+    expect(await saveTruth(folder, 'statement', JSON_TEXT, false)).toEqual({ ok: false, reason: 'exists' });
+    expect(await saveTruth(`${folder}/`, 'statement', JSON_TEXT, true)).toEqual({ ok: true });
+    expect(await readFile(target, 'utf8')).toBe(JSON_TEXT);
+    expect(await readdir(folder)).toEqual(['statement.truth.json']);
+  });
+
   test.each([false, true])('a save writes the .tmp file, then renames it (replace %j)', async (replace) => {
     const target = path.join(folder, 'statement.truth.json');
     expect(await saveTruth(folder, 'statement', JSON_TEXT, replace)).toEqual({ ok: true });
@@ -159,6 +172,16 @@ describe('targetState', () => {
     expect(await targetState(folder, 'other')).toEqual({ folderExists: true, truthExists: false, wordFileExists: false });
   });
 
+  test('a folder text with a slash at its end gives the same state', async () => {
+    expect(await targetState(`${folder}/`, 'statement')).toEqual({ folderExists: true, truthExists: false, wordFileExists: false });
+    await saveTruth(folder, 'statement', JSON_TEXT, false);
+    expect(await targetState(`${folder}/`, 'statement')).toEqual({ folderExists: true, truthExists: true, wordFileExists: false });
+    await writeFile(path.join(folder, 'statement.docx'), '');
+    expect(await targetState(`${folder}/`, 'statement')).toEqual(await targetState(folder, 'statement'));
+    expect(await targetState(`${folder}/`, 'statement')).toEqual({ folderExists: true, truthExists: true, wordFileExists: true });
+    expect(await targetState(`${folder}/`, 'other')).toEqual({ folderExists: true, truthExists: false, wordFileExists: false });
+  });
+
   test('an empty folder text or an empty name', async () => {
     expect(await targetState('', 'statement')).toEqual({ folderExists: false, truthExists: false, wordFileExists: false });
     expect(await targetState(folder, '')).toEqual({ folderExists: true, truthExists: false, wordFileExists: false });
@@ -207,6 +230,13 @@ describe('pickedTruth', () => {
   test('an ending in capital letters is not the file that a save writes', async () => {
     await writeFile(path.join(folder, 'statement.TRUTH.JSON'), JSON_TEXT);
     expect(await pickedTruth(path.join(folder, 'statement.TRUTH.JSON'))).toEqual({ folder, stem: 'statement', file: 'statement.TRUTH.JSON', sameFile: false, json: JSON_TEXT });
+  });
+
+  test('a file with the name .truth.json has an empty stem, and sameFile is true', async () => {
+    await writeFile(path.join(folder, '.truth.json'), JSON_TEXT);
+    // The path of the target for an empty stem is the path of this file. A save refuses an empty stem.
+    expect(await saveTruth(folder, '', JSON_TEXT, true)).toEqual({ ok: false, reason: 'bad-name' });
+    expect(await pickedTruth(path.join(folder, '.truth.json'))).toEqual({ folder, stem: '', file: '.truth.json', sameFile: true, json: JSON_TEXT });
   });
 
   test('a file that the app cannot read gives no text', async () => {

@@ -2,7 +2,7 @@ import type { TargetState } from '../shared/bridge';
 import { emptyForm, nextPartyLabel, type Contact, type ContactList, type FormState, type Other, type Party, type RedactRow, type TextList } from '../shared/model';
 import { ID_TYPES } from '../shared/schema';
 import { serialise } from '../shared/serialise';
-import { cleanStem } from '../shared/target';
+import { cleanStem, targetPath } from '../shared/target';
 
 // The state of the window, and a reducer on the model. A new row gets its
 // `id` from the caller, so that the reducer is a pure function.
@@ -98,7 +98,17 @@ export function formReducer(form: FormState, action: FormAction): FormState {
       const source = form.redact[place];
       const [first, ...rest] = action.lines;
       if (!source || first === undefined) return form;
-      const rows = rest.map((text, n): RedactRow => ({ id: action.ids[n] ?? `${action.id}-${n}`, text, entity: source.entity, expect: source.expect, type: source.type }));
+      // The caller gives one id for each new row. A row with no id gets an id that no row has.
+      const used = new Set([...form.redact.map((row) => row.id), ...action.ids]);
+      let free = 0;
+      const freeId = (): string => {
+        let id: string;
+        do id = `${action.id}-${free++}`;
+        while (used.has(id));
+        used.add(id);
+        return id;
+      };
+      const rows = rest.map((text, n): RedactRow => ({ id: action.ids[n] ?? freeId(), text, entity: source.entity, expect: source.expect, type: source.type }));
       return { ...form, redact: [...form.redact.slice(0, place), { ...source, text: first }, ...rows, ...form.redact.slice(place + 1)] };
     }
     case 'addText':
@@ -125,8 +135,14 @@ export interface AppState {
   folder: string;
   /** The text of the name field. `cleanStem` gives the stem. */
   name: string;
-  /** The file that the form opened or saved last. Save replaces it with no question. `null` when Save writes another file. */
+  /** The file that the form opened or saved last. `null` when the form opened and saved no file that Save writes. */
   opened: { folder: string; stem: string } | null;
+  /**
+   * The path of each file that this form opened or saved, from the time that
+   * the form began. Save replaces each of them with no question. New, an open,
+   * a new file of the same matter and the next file start a new list.
+   */
+  ownFiles: string[];
   /**
    * The name that the top bar shows: the file that the user picked in an open,
    * or the file of the last save. `null` for a new file. It can be another
@@ -172,15 +188,21 @@ export const isDirty = (state: AppState): boolean => snapshot(state) !== state.b
 
 type Parts = Pick<AppState, 'form' | 'folder' | 'name' | 'opened' | 'fileName' | 'knownEntities'>;
 
-/** A form with no unsaved change. It gets the next numbers after the state before it. */
+/** A form with no unsaved change. It gets the next numbers after the state before it. Its own files are the opened file only. */
 function clean(parts: Parts, before?: AppState): AppState {
-  return { ...parts, formNo: (before?.formNo ?? -1) + 1, targetNo: (before?.targetNo ?? -1) + 1, baseline: snapshot(parts), fillNote: null };
+  const ownFiles = parts.opened === null ? [] : [targetPath(parts.opened.folder, parts.opened.stem)];
+  return { ...parts, ownFiles, formNo: (before?.formNo ?? -1) + 1, targetNo: (before?.targetNo ?? -1) + 1, baseline: snapshot(parts), fillNote: null };
 }
 
 const emptyParts = (): Parts => ({ form: emptyForm(), folder: '', name: '', opened: null, fileName: null, knownEntities: [] });
 
 export function initialState(): AppState {
   return clean(emptyParts());
+}
+
+/** `true` when this form opened or saved the file that a save of this folder and stem writes. */
+export function isOwnFile(state: AppState, folder: string, stem: string): boolean {
+  return state.ownFiles.includes(targetPath(folder, stem));
 }
 
 /** The save target of the form: the text of the folder field, the stem, and the number of the target. */
@@ -257,7 +279,13 @@ export function reducer(state: AppState, action: AppAction): AppState {
       // The result of a save of another form says nothing about this form.
       if (action.formNo !== state.formNo) return state;
       // The baseline is the text that the disk has. A change that came after the save stays a change.
-      return { ...state, opened: { folder: action.folder, stem: action.stem }, fileName: `${action.stem}.truth.json`, baseline: snapshotOf(action.folder, action.stem, action.json) };
+      return {
+        ...state,
+        opened: { folder: action.folder, stem: action.stem },
+        ownFiles: isOwnFile(state, action.folder, action.stem) ? state.ownFiles : [...state.ownFiles, targetPath(action.folder, action.stem)],
+        fileName: `${action.stem}.truth.json`,
+        baseline: snapshotOf(action.folder, action.stem, action.json),
+      };
     default: {
       const form = formReducer(state.form, action);
       return form === state.form ? state : { ...state, form };

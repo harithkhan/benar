@@ -81,6 +81,7 @@ interface SelectProps extends FieldLook {
   options: readonly Option[];
   onChange: (value: string) => void;
   'aria-label'?: string;
+  'aria-describedby'?: string;
   className?: string;
 }
 
@@ -185,9 +186,10 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
   );
 }
 
-/** A list of short texts as chips. Enter adds the typed text. */
+/** A list of short texts as chips. Enter adds the typed text. The box has the look of one field: a click on it puts the cursor in its input. */
 export function ChipInput({ values, onChange, label, placeholder = 'Add another…' }: { values: readonly string[]; onChange: (values: string[]) => void; label: string; placeholder?: string }) {
   const [draft, setDraft] = useState('');
+  const input = useRef<HTMLInputElement>(null);
   const labelId = useContext(LabelFor);
   const add = () => {
     const value = draft.trim();
@@ -195,17 +197,27 @@ export function ChipInput({ values, onChange, label, placeholder = 'Add another�
     setDraft('');
   };
   return (
-    <div className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-control border border-line-strong bg-field px-2 py-1.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/35">
+    <div
+      onMouseDown={(event) => {
+        // Only for the box itself, not for a chip. The input keeps the focus that it has.
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        input.current?.focus();
+      }}
+      className="flex min-h-11 cursor-text flex-wrap items-center gap-1.5 rounded-control border border-line-strong bg-field px-2 py-1.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/35"
+    >
       {values.map((value, place) => (
         // A loaded file can have the same text two times. So the key and the remove use the place.
-        <span key={place} className="inline-flex items-center gap-1 rounded-chip bg-panel-2 py-0.5 pl-2 pr-1 text-sm">
-          {value}
-          <button type="button" aria-label={`Remove ${value}`} onClick={() => onChange(values.filter((_, n) => n !== place))} className="rounded-chip px-1 leading-none text-ink-muted hover:text-danger-text">
+        // A chip is not wider than the box: a long text with no space is cut.
+        <span key={place} className="inline-flex min-w-0 max-w-full cursor-default items-center gap-1 rounded-chip bg-panel-2 py-0.5 pl-2 pr-1 text-sm">
+          <span className="truncate">{value}</span>
+          <button type="button" aria-label={`Remove ${value}`} onClick={() => onChange(values.filter((_, n) => n !== place))} className="shrink-0 rounded-chip px-1 leading-none text-ink-muted hover:text-danger-text">
             ×
           </button>
         </span>
       ))}
       <input
+        ref={input}
         type="text"
         spellCheck={false}
         id={labelId}
@@ -289,12 +301,16 @@ export const FILE_KEY = 'file';
 
 export const hasCode = (list: readonly Problem[] | undefined, ...codes: Problem['code'][]): boolean => list?.some((problem) => codes.includes(problem.code)) ?? false;
 
-/** The lines under a row: an error in the danger colour, a warning in the warning colour. */
-export function RowProblems({ list, only }: { list: readonly Problem[] | undefined; only?: readonly Problem['code'][] }) {
+/**
+ * The lines under a row: an error in the danger colour, a warning in the
+ * warning colour. A control that a line is about names the list with `id` in
+ * `aria-describedby`.
+ */
+export function RowProblems({ id, list, only }: { id: string; list: readonly Problem[] | undefined; only?: readonly Problem['code'][] }) {
   const shown = only ? list?.filter((problem) => only.includes(problem.code)) : list;
   if (!shown?.length) return null;
   return (
-    <ul className="mt-1.5 flex flex-col gap-0.5">
+    <ul id={id} className="mt-1.5 flex flex-col gap-0.5">
       {shown.map((problem) => (
         <li key={problem.code} className={cx('text-xs', problem.level === 'error' ? 'text-danger-text' : 'text-warn-text')}>
           {MESSAGE[problem.code]}

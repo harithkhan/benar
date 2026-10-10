@@ -7,6 +7,7 @@ import { CHANNEL } from '../shared/bridge';
 import { splitPath } from '../shared/target';
 import { pickedTruth, saveTruth, targetState } from './files';
 import { installMenu } from './menu';
+import { appFilePath, isPermitted } from './policy';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -40,12 +41,9 @@ protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: t
 
 function serveAppFiles(appSession: Session): void {
   appSession.protocol.handle('app', async (request) => {
-    const url = new URL(request.url);
-    if (url.host !== 'benar') return new Response(null, { status: 404 });
-    const relative = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
-    const file = path.join(RENDERER_DIR, relative);
-    // A path that leaves the folder of the renderer gets no file.
-    if (!file.startsWith(RENDERER_DIR + path.sep)) return new Response(null, { status: 404 });
+    // A request that is not for a file of the renderer folder gets no file.
+    const file = appFilePath(request.url, RENDERER_DIR);
+    if (file === null) return new Response(null, { status: 404 });
     try {
       const body = await readFile(file);
       return new Response(new Uint8Array(body), {
@@ -60,27 +58,10 @@ function serveAppFiles(appSession: Session): void {
   });
 }
 
-// No network: the session cancels each request that is not for the app's own
-// files. In `pnpm start` the Vite dev server is permitted too.
-function isPermitted(requestUrl: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(requestUrl);
-  } catch {
-    return false;
-  }
-  if (url.protocol === 'app:' && url.host === 'benar') return true;
-  if (DEV_URL) {
-    if (url.protocol === 'devtools:') return true;
-    const dev = new URL(DEV_URL);
-    if (url.host === dev.host && (url.protocol === 'http:' || url.protocol === 'ws:')) return true;
-  }
-  return false;
-}
-
+// No network: the session cancels each request that `isPermitted` refuses.
 function blockRequests(appSession: Session): void {
   appSession.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !isPermitted(details.url) });
+    callback({ cancel: !isPermitted(details.url, DEV_URL) });
   });
   if (DEV_URL) {
     appSession.webRequest.onHeadersReceived((details, callback) => {

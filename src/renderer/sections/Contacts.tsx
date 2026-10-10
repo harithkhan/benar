@@ -1,11 +1,11 @@
 import { newId, writeLabel, type ContactList } from '../../shared/model';
 import { Button, Card, focusRow, hasCode, Input, RemoveButton, RowProblems, Select, TextArea, type Option } from '../components/ui';
-import type { SectionProps } from './shared';
+import { describedBy, type SectionProps } from './shared';
 
-const NAMES: Record<ContactList, { title: string; one: string; add: string }> = {
-  addresses: { title: 'Addresses', one: 'address', add: '+ Add address' },
-  emails: { title: 'Emails', one: 'email', add: '+ Add email' },
-  phones: { title: 'Phones', one: 'phone', add: '+ Add phone' },
+const NAMES: Record<ContactList, { title: string; one: string }> = {
+  addresses: { title: 'Addresses', one: 'address' },
+  emails: { title: 'Emails', one: 'email' },
+  phones: { title: 'Phones', one: 'phone' },
 };
 
 const NO_PARTY = '';
@@ -29,7 +29,7 @@ export function Contacts({ list, form, problems, dispatch }: SectionProps & { li
       hint={list === 'addresses' ? 'Type each address as it stands in the document, with its lines.' : undefined}
       actions={
         <Button compact onClick={add}>
-          {names.add}
+          + Add
         </Button>
       }
     >
@@ -41,6 +41,7 @@ export function Contacts({ list, form, problems, dispatch }: SectionProps & { li
             const unknown = !linked && row.unknownParty !== undefined;
             const text = (value: string) => dispatch({ type: 'contact', list, id: row.id, patch: { text: value } });
             const label = `${names.one} ${place + 1}`;
+            const problemsId = `problems-${row.id}`;
             return (
               <li key={row.id} id={`row-${row.id}`} className="scroll-mt-4">
                 <div className="flex items-start gap-2">
@@ -56,12 +57,13 @@ export function Contacts({ list, form, problems, dispatch }: SectionProps & { li
                       onChange={(value) => dispatch({ type: 'contact', list, id: row.id, patch: { partyId: value === NO_PARTY ? null : value } })}
                       invalid={hasCode(rowProblems, 'contact-unknown-party')}
                       data-field="party"
+                      aria-describedby={describedBy(rowProblems, 'party', problemsId)}
                       width="w-36"
                     />
                   </label>
                   <RemoveButton label={`Remove ${label}`} onClick={() => dispatch({ type: 'remove', list, id: row.id })} />
                 </div>
-                <RowProblems list={rowProblems} />
+                <RowProblems id={problemsId} list={rowProblems} />
               </li>
             );
           })}

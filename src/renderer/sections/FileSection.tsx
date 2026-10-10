@@ -4,6 +4,7 @@ import type { FormState } from '../../shared/model';
 import { targetPath } from '../../shared/target';
 import { Button, Card, CardBody, FILE_KEY, hasCode, Input, Labelled, RowProblems, Switch, type ProblemMap } from '../components/ui';
 import type { AppAction } from '../state';
+import { describedBy } from './shared';
 
 interface Props {
   form: FormState;
@@ -33,17 +34,17 @@ export function FileSection({ form, folder, name, stem, problems, dispatch }: Pr
           <div>
             <Labelled label="Folder">
               <div className="flex gap-2">
-                <Input value={folder} onChange={(value) => dispatch({ type: 'folder', value })} mono invalid={hasCode(list, 'target-folder-empty', 'target-folder-missing')} data-field="folder" placeholder="/path/to/the/folder" />
+                <Input value={folder} onChange={(value) => dispatch({ type: 'folder', value })} mono invalid={hasCode(list, 'target-folder-empty', 'target-folder-missing')} data-field="folder" aria-describedby={describedBy(list, 'folder', 'problems-file-folder')} placeholder="/path/to/the/folder" />
                 <Button onClick={browse}>Browse…</Button>
               </div>
             </Labelled>
-            <RowProblems list={list} only={['target-folder-empty', 'target-folder-missing']} />
+            <RowProblems id="problems-file-folder" list={list} only={['target-folder-empty', 'target-folder-missing']} />
           </div>
           <div>
             <Labelled label="Name" hint="the same name as the Word file">
-              <Input value={name} onChange={(value) => dispatch({ type: 'name', value })} mono invalid={hasCode(list, 'target-name-empty', 'target-name-bad')} data-field="name" placeholder="name" />
+              <Input value={name} onChange={(value) => dispatch({ type: 'name', value })} mono invalid={hasCode(list, 'target-name-empty', 'target-name-bad')} data-field="name" aria-describedby={describedBy(list, 'name', 'problems-file-name')} placeholder="name" />
             </Labelled>
-            <RowProblems list={list} only={['target-name-empty', 'target-name-bad', 'no-word-file']} />
+            <RowProblems id="problems-file-name" list={list} only={['target-name-empty', 'target-name-bad', 'no-word-file']} />
           </div>
         </div>
 
@@ -59,8 +60,8 @@ export function FileSection({ form, folder, name, stem, problems, dispatch }: Pr
           <Switch checked={form.batchOn} onChange={(on) => dispatch({ type: 'batchOn', on })} label="Part of a batch" />
           {form.batchOn && (
             <div className="min-w-56 flex-1">
-              <Input value={form.batch} onChange={(value) => dispatch({ type: 'batch', value })} accent aria-label="Batch" data-field="batch" placeholder="matter-1" />
-              <RowProblems list={list} only={['batch-empty']} />
+              <Input value={form.batch} onChange={(value) => dispatch({ type: 'batch', value })} accent aria-label="Batch" data-field="batch" aria-describedby={describedBy(list, 'batch', 'problems-file-batch')} placeholder="matter-1" />
+              <RowProblems id="problems-file-batch" list={list} only={['batch-empty']} />
             </div>
           )}
           {!form.batchOn && <span className="text-sm text-ink-faint">Files with the same batch value are one batch.</span>}

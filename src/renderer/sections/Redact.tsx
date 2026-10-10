@@ -5,7 +5,7 @@ import { newId, type RedactRow } from '../../shared/model';
 import { EXPECTS } from '../../shared/schema';
 import { Banner, Button, Card, focusRow, hasCode, Input, RemoveButton, RowProblems, Select, type Option } from '../components/ui';
 import { entityIds, pasteLines } from '../state';
-import { TYPE_OPTIONS, type SectionProps } from './shared';
+import { describedBy, TYPE_OPTIONS, type SectionProps } from './shared';
 
 const EXPECT_OPTIONS: readonly Option[] = EXPECTS.map((expect) => ({ value: expect.value, label: expect.value }));
 const REDACT_TYPE_OPTIONS: readonly Option[] = [{ value: '', label: 'No type' }, ...TYPE_OPTIONS];
@@ -89,19 +89,20 @@ export function Redact({ form, problems, dispatch, knownEntities, fillNote }: Pr
               const list = problems.get(row.id);
               const patch = (change: Partial<Pick<RedactRow, 'text' | 'entity' | 'expect' | 'type'>>) => dispatch({ type: 'redact', id: row.id, patch: change });
               const n = place + 1;
+              const problemsId = `problems-${row.id}`;
               return (
                 <li key={row.id} id={`row-${row.id}`} className="scroll-mt-4 py-1">
                   <div className={COLUMNS}>
-                    <Input compact value={row.text} onChange={(text) => patch({ text })} onPaste={paste(row)} invalid={hasCode(list, 'redact-text-empty')} aria-label={`Text of row ${n}`} data-field="text" />
-                    <Input compact accent value={row.entity} onChange={(entity) => patch({ entity })} list="entity-ids" invalid={hasCode(list, 'redact-entity-empty')} aria-label={`Entity of row ${n}`} data-field="entity" />
-                    <Select compact value={row.expect} options={EXPECT_OPTIONS} onChange={(expect) => patch({ expect })} invalid={hasCode(list, 'redact-expect')} aria-label={`Expect of row ${n}`} data-field="expect" />
-                    <Select compact value={row.type} options={REDACT_TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'redact-type')} aria-label={`Type of row ${n}`} data-field="type" />
+                    <Input compact value={row.text} onChange={(text) => patch({ text })} onPaste={paste(row)} invalid={hasCode(list, 'redact-text-empty')} aria-label={`Text of row ${n}`} data-field="text" aria-describedby={describedBy(list, 'text', problemsId)} />
+                    <Input compact accent value={row.entity} onChange={(entity) => patch({ entity })} list="entity-ids" invalid={hasCode(list, 'redact-entity-empty')} aria-label={`Entity of row ${n}`} data-field="entity" aria-describedby={describedBy(list, 'entity', problemsId)} />
+                    <Select compact value={row.expect} options={EXPECT_OPTIONS} onChange={(expect) => patch({ expect })} invalid={hasCode(list, 'redact-expect')} aria-label={`Expect of row ${n}`} data-field="expect" aria-describedby={describedBy(list, 'expect', problemsId)} />
+                    <Select compact value={row.type} options={REDACT_TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'redact-type')} aria-label={`Type of row ${n}`} data-field="type" aria-describedby={describedBy(list, 'type', problemsId)} />
                     <Button compact onClick={() => addForm(row.id)} aria-label={`Add a form below row ${n}`} title="A new row below with the same entity, expect and type" flush>
                       + form
                     </Button>
                     <RemoveButton label={`Remove row ${n}`} onClick={() => dispatch({ type: 'remove', list: 'redact', id: row.id })} />
                   </div>
-                  <RowProblems list={list} />
+                  <RowProblems id={problemsId} list={list} />
                 </li>
               );
             })}

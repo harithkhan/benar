@@ -163,6 +163,46 @@ describe('Add rows from intake', () => {
     ]);
   });
 
+  test('two parties whose labels give the same slug share one counter for their linked rows', () => {
+    const state = load((file) => {
+      file.intake.parties[0].aliases = [];
+      file.intake.parties[0].idNumber = null;
+      file.intake.parties[1].label = '[PARTY-A]';
+      file.intake.parties[1].aliases = [];
+      file.intake.addresses = [
+        { text: 'No. 12, Jalan Mawar 3', party: '[PARTY A]' },
+        { text: 'Lot 8, Jalan Industri 2', party: '[PARTY-A]' },
+        { text: 'No. 3, Lorong Melati', party: '[PARTY A]' },
+        { text: 'Peti Surat 55', party: null },
+      ];
+      file.intake.emails = [
+        { text: 'info@example.com', party: '[PARTY-A]' },
+        { text: 'tan@example.com', party: '[PARTY A]' },
+      ];
+      file.intake.phones = [
+        { text: '012-345 6789', party: '[PARTY A]' },
+        { text: '03-5555 0101', party: '[PARTY-A]' },
+      ];
+    });
+    // The two labels are not the same label. So each row keeps its own party.
+    const [a, b] = state.parties;
+    expect(state.addresses.map((row) => row.partyId)).toEqual([a!.id, b!.id, a!.id, null]);
+    expect(state.emails.map((row) => row.partyId)).toEqual([b!.id, a!.id]);
+    // The counter of a linked row has the slug as its key, and not the party.
+    expect(rows(state)).toEqual([
+      ['Tan Ah Kow', 'party-a', 'entered', 'party'],
+      ['Bayu Lestari Sdn Bhd', 'party-a', 'entered', 'company'],
+      ['No. 12, Jalan Mawar 3', 'party-a-address', 'entered', 'address'],
+      ['Lot 8, Jalan Industri 2', 'party-a-address-2', 'entered', 'address'],
+      ['No. 3, Lorong Melati', 'party-a-address-3', 'entered', 'address'],
+      ['Peti Surat 55', 'address-1', 'entered', 'address'],
+      ['info@example.com', 'party-a-email', 'entered', 'email'],
+      ['tan@example.com', 'party-a-email-2', 'entered', 'email'],
+      ['012-345 6789', 'party-a-phone', 'entered', 'phone'],
+      ['03-5555 0101', 'party-a-phone-2', 'entered', 'phone'],
+    ]);
+  });
+
   test('entries of others with no owner', () => {
     const state = load((file) => {
       file.intake.parties = [];

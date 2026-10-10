@@ -1,7 +1,7 @@
 import { newId, writeLabel, type Other } from '../../shared/model';
 import { ID_TYPES, NAME_TYPES } from '../../shared/schema';
 import { Button, Card, focusRow, hasCode, Input, RemoveButton, RowProblems, Select, type Option } from '../components/ui';
-import { TYPE_OPTIONS, type SectionProps } from './shared';
+import { describedBy, TYPE_OPTIONS, type SectionProps } from './shared';
 
 const NO_OWNER = '';
 const UNKNOWN_OWNER = '?';
@@ -41,10 +41,11 @@ export function Others({ form, problems, dispatch }: SectionProps) {
             const owners: Option[] = form.others.flatMap((candidate, n) => (candidate.id === other.id || (candidate.id !== owner?.id && (!NAME_TYPES.has(candidate.type) || hasOwner(candidate))) ? [] : [{ value: candidate.id, label: ownerName(candidate, n) }]));
             if (owner?.id === other.id) owners.push({ value: other.id, label: 'This entry' });
             const showOwner = ID_TYPES.has(other.type) || owner !== undefined || other.unknownOf !== undefined;
+            const problemsId = `problems-${other.id}`;
             return (
               <li key={other.id} id={`row-${other.id}`} className="scroll-mt-4 border-b border-line px-4 py-2.5 last:border-b-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select compact value={other.type} options={TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'other-type', 'of-not-id-type')} aria-label={`Type of entry ${place + 1}`} data-field="type" width="w-52" />
+                  <Select compact value={other.type} options={TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'other-type', 'of-not-id-type')} aria-label={`Type of entry ${place + 1}`} data-field="type" aria-describedby={describedBy(list, 'type', problemsId)} width="w-52" />
                   <Input compact value={other.text} onChange={(text) => patch({ text })} aria-label={`Text of entry ${place + 1}`} placeholder="Text, as it stands in the document" className="min-w-48 flex-1" />
                   <Input
                     compact
@@ -56,6 +57,7 @@ export function Others({ form, problems, dispatch }: SectionProps) {
                     aria-label={`Role label of entry ${place + 1}`}
                     placeholder="ROLE LABEL"
                     data-field="label"
+                    aria-describedby={describedBy(list, 'label', problemsId)}
                     width="w-40"
                   />
                   {showOwner && (
@@ -68,13 +70,14 @@ export function Others({ form, problems, dispatch }: SectionProps) {
                         onChange={(value) => value !== UNKNOWN_OWNER && patch({ ownerId: value === NO_OWNER ? null : value })}
                         invalid={hasCode(list, 'of-self', 'of-missing', 'of-owner-type', 'of-owner-has-of')}
                         data-field="owner"
+                        aria-describedby={describedBy(list, 'owner', problemsId)}
                         width="w-48"
                       />
                     </label>
                   )}
                   <RemoveButton label={`Remove entry ${place + 1}`} onClick={() => dispatch({ type: 'remove', list: 'others', id: other.id })} />
                 </div>
-                <RowProblems list={list} />
+                <RowProblems id={problemsId} list={list} />
               </li>
             );
           })}

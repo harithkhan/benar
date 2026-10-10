@@ -328,6 +328,53 @@ describe('warnings', () => {
     expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-entity-shared' }]);
   });
 
+  test('a party label and an entry of others with no label get the same entity id', () => {
+    // The entry gets its type and its number: `person-1`.
+    const state = withOthers([{ type: 'person', text: 'Siti binti Hassan' }]);
+    state.parties[1]!.label = '[PERSON 1]';
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-entity-shared' },
+    ]);
+  });
+
+  test('a party label and an address with no party get the same entity id', () => {
+    const file = example();
+    file.intake.addresses.push({ text: 'Peti Surat 55', party: null });
+    const state = load(file);
+    state.parties[1]!.label = '[ADDRESS 1]';
+    // The address gets no warning of its own.
+    expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' }]);
+  });
+
+  test('an entry of others whose owner is not in the list is a thing of its own: it can get the entity id of a party', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'nric', text: '900101-01-1234', of: 0 },
+    ]);
+    state.others = state.others.slice(1);
+    expect(state.others[0]!.ownerId).not.toBeNull();
+    // With no owner in the list, the entry gets its type and its number: `nric-1`.
+    expect(validate(state, TARGET)).toEqual([]);
+    state.parties[1]!.label = '[NRIC 1]';
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-entity-shared' },
+    ]);
+  });
+
+  test('an entry of others whose owner is not in the list can get the entity id of the label of another entry', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'nric', text: '900101-01-1234', of: 0 },
+      { type: 'person', text: 'Lim Mei Ling', label: '[NRIC 1]' },
+    ]);
+    // With the owner in the list, the entry gets `secretary-1-nric`.
+    expect(validate(state, TARGET)).toEqual([]);
+    state.others = state.others.slice(1);
+    expect(validate(state, TARGET)).toEqual(state.others.map((other) => ({ level: 'warning', section: 'others', rowId: other.id, code: 'other-entity-shared' })));
+  });
+
   test('an entry of others with an owner and a party get the same entity id', () => {
     const state = withOthers([
       { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },

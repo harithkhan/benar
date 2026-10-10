@@ -3,7 +3,7 @@ import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { menuEventName, type MenuCommand, type SaveResult, type TargetState } from '../shared/bridge';
 import { parse } from '../shared/parse';
 import { serialise } from '../shared/serialise';
-import { cleanStem, targetPath } from '../shared/target';
+import { cleanStem } from '../shared/target';
 import { validate, type Problem } from '../shared/validate';
 import { Button, Dialog, FILE_KEY, Toast, type ProblemMap } from './components/ui';
 import { AlwaysKeep } from './sections/AlwaysKeep';
@@ -16,7 +16,7 @@ import { Parties } from './sections/Parties';
 import { Redact } from './sections/Redact';
 import { TextList } from './sections/TextList';
 import { TopBar } from './sections/TopBar';
-import { initialState, isDirty, reducer, shownTargetState, type AppAction, type FoundTarget } from './state';
+import { initialState, isDirty, isOwnFile, reducer, shownTargetState, type AppAction, type FoundTarget } from './state';
 
 /**
  * What the form shows as the state of the disk for the save target, or `null`
@@ -60,7 +60,13 @@ const SAVE_FAILED: Record<Exclude<SaveResult, { ok: true }>['reason'], string> =
 
 export function App() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
-  const [ask, setAsk] = useState<Ask | null>(null);
+  const [ask, setAskNow] = useState<Ask | null>(null);
+  /** `true` while a dialog is open, for a menu command that comes before the next render. */
+  const asking = useRef(false);
+  const setAsk = (next: Ask | null) => {
+    asking.current = next !== null;
+    setAskNow(next);
+  };
   const [savedStem, setSavedStem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   /** The same as `saving`, for a second command that comes before the next render. */
@@ -96,10 +102,15 @@ export function App() {
     };
   };
 
-  /** Gives the window another form. Not while a save is in progress, also when the save started after the command. */
+  /**
+   * Gives the window another form. Not while a save is in progress, also when
+   * the save started after the command. No question and no notice of the form
+   * before it stays open.
+   */
   const replaceForm = (action: Extract<AppAction, { type: 'new' | 'opened' | 'fromMatter' | 'nextFile' }>) => {
     if (saveStarted.current) return;
     dispatch(action);
+    setAsk(null);
     setSavedStem(null);
     toTop();
   };
@@ -146,9 +157,8 @@ export function App() {
     try {
       const target = { folder: folder.trim(), stem };
       const { formNo } = state;
-      // Save replaces the file that the form opened, and asks for each other file.
-      const isOpened = state.opened !== null && targetPath(state.opened.folder, state.opened.stem) === targetPath(target.folder, target.stem);
-      const result = await window.benar.saveTruth(target.folder, target.stem, json, replace || isOpened);
+      // Save replaces a file that the form opened or saved, and asks for each other file.
+      const result = await window.benar.saveTruth(target.folder, target.stem, json, replace || isOwnFile(state, target.folder, target.stem));
       if (result.ok) {
         dispatch({ type: 'saved', ...target, json, formNo });
         setSavedStem(target.stem);
@@ -163,12 +173,17 @@ export function App() {
     }
   };
 
-  // The File menu. The handlers of the last render do the work.
+  // The File menu. The handlers of the last render do the work. A dialog of
+  // the app is modal for the page, but not for the menu: a command does
+  // nothing while a dialog is open.
   const commands = useRef<Record<MenuCommand, () => void>>(null);
   commands.current = { new: newFile, open: openFile, 'new-from-matter': newFromMatter, save: () => void save() };
   useEffect(() => {
     const names: MenuCommand[] = ['new', 'open', 'new-from-matter', 'save'];
-    const listeners = names.map((command) => [menuEventName(command), () => commands.current?.[command]()] as const);
+    const run = (command: MenuCommand) => {
+      if (!asking.current) commands.current?.[command]();
+    };
+    const listeners = names.map((command) => [menuEventName(command), () => run(command)] as const);
     for (const [event, listener] of listeners) window.addEventListener(event, listener);
     return () => {
       for (const [event, listener] of listeners) window.removeEventListener(event, listener);
@@ -182,7 +197,8 @@ export function App() {
     <div className="flex h-full flex-col">
       <TopBar fileName={state.fileName} dirty={dirty} onNew={saving ? undefined : newFile} onOpen={saving ? undefined : openFile} onNewFromMatter={saving ? undefined : newFromMatter} />
       <main ref={page} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex max-w-[1060px] flex-col gap-4 px-5 py-5">
+        {/* The key gives each new form new components: no text that the user typed and did not enter stays, and no open panel. */}
+        <div key={state.formNo} className="mx-auto flex max-w-[1060px] flex-col gap-4 px-5 py-5">
           <FileSection form={form} folder={folder} name={name} stem={stem} problems={problemMap} dispatch={dispatch} />
           <Parties {...section} />
           <Contacts list="addresses" {...section} />
