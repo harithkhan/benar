@@ -234,7 +234,7 @@ Each phase ends with `pnpm verify`, a tick in this file and one commit (`Phase n
 - [x] **Phase 2, the bridge.** `files.ts`, `preload.ts`, `menu.ts`, the request block, the close question. Tests for `files.ts` on a temporary folder: a save, a refused replace, a replace, no `.tmp` file left, `targetState`.
 - [x] **Phase 3, the intake part of the form.** `ui.tsx`, `state.ts` (a reducer on the model), and sections 1 to 6 of the page.
 - [x] **Phase 4, the truth part of the form.** Sections 7 to 10: the Redact table, the fill button, Keep, Own titles, the JSON panel, the footer with the checks.
-- [ ] **Phase 5, the flows and the app.** New, Open, New from same matter, Save, the replace dialog, the toast, the unsaved-changes questions. Then `pnpm package` and `scripts/install-app.mjs`, which copies `out/Benar-darwin-arm64/Benar.app` to `/Applications/Benar.app`. If the app does not open, sign it ad hoc: `codesign --force --deep --sign - <app>`. Complete `README.md`: purpose, the rules of section 2, start, build, install.
+- [x] **Phase 5, the flows and the app.** New, Open, New from same matter, Save, the replace dialog, the toast, the unsaved-changes questions. Then `pnpm package` and `scripts/install-app.mjs`, which copies `out/Benar-darwin-arm64/Benar.app` to `/Applications/Benar.app`. If the app does not open, sign it ad hoc: `codesign --force --deep --sign - <app>`. Complete `README.md`: purpose, the rules of section 2, start, build, install.
 - [ ] **Phase 6, publish.** Do the checks of section 9. Then `gh repo create harithkhan/benar --public --source=. --remote=origin --push`. Confirm that `main` is on GitHub and that the working tree is clean.
 
 ## 9. Verification

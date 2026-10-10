@@ -27,7 +27,16 @@ describe('the reducer', () => {
     expect(isDirty(state)).toBe(false);
     const changed = run(state, { type: 'batch', value: 'matter-2' });
     expect(isDirty(changed)).toBe(true);
-    expect(isDirty(run(changed, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement' }))).toBe(false);
+    const saved = run(changed, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(changed.form) });
+    expect(isDirty(saved)).toBe(false);
+    expect(saved.opened).toEqual({ folder: '/scratch/matter-1', stem: 'statement' });
+  });
+
+  test('a change that came after the save stays a change', () => {
+    const state = opened();
+    const json = serialise(state.form);
+    const later = run(state, { type: 'batch', value: 'matter-2' }, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json });
+    expect(isDirty(later)).toBe(true);
   });
 
   test('a typed ending of the name is not a change', () => {

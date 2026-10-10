@@ -135,10 +135,12 @@ export type AppAction =
   | { type: 'opened'; form: FormState; folder: string; stem: string }
   | { type: 'fromMatter'; source: FormState; folder: string }
   | { type: 'nextFile' }
-  | { type: 'saved'; folder: string; stem: string };
+  | { type: 'saved'; folder: string; stem: string; json: string };
+
+const snapshotOf = (folder: string, stem: string, json: string): string => JSON.stringify([folder.trim(), stem, json]);
 
 export function snapshot(state: Pick<AppState, 'form' | 'folder' | 'name'>): string {
-  return JSON.stringify([state.folder.trim(), cleanStem(state.name), serialise(state.form)]);
+  return snapshotOf(state.folder, cleanStem(state.name), serialise(state.form));
 }
 
 export const isDirty = (state: AppState): boolean => snapshot(state) !== state.baseline;
@@ -189,7 +191,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'nextFile':
       return clean({ form: sameMatter(state.form), folder: state.folder, name: '', opened: null, knownEntities: entityIds(state.form.redact, state.knownEntities) });
     case 'saved':
-      return { ...state, opened: { folder: action.folder, stem: action.stem }, baseline: snapshot(state) };
+      // The baseline is the text that the disk has. A change that came after the save stays a change.
+      return { ...state, opened: { folder: action.folder, stem: action.stem }, baseline: snapshotOf(action.folder, action.stem, action.json) };
     default: {
       const form = formReducer(state.form, action);
       return form === state.form ? state : { ...state, form };

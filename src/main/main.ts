@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, type IpcMainInvokeEvent, type Session } from 'electron';
 
 import { CHANNEL } from '../shared/bridge';
 import { splitPath } from '../shared/target';
@@ -16,6 +16,10 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 const APP_ORIGIN = 'app://benar';
 const DEV_URL = MAIN_WINDOW_VITE_DEV_SERVER_URL;
 const RENDERER_DIR = path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}`);
+
+// A partition with no `persist:` prefix is a session in memory only. So the
+// session keeps no cache and no storage on the disk.
+const PARTITION = 'benar';
 
 const POLICY = "default-src 'self'";
 // `pnpm start` only: the Vite dev server adds its styles and its refresh
@@ -34,8 +38,8 @@ const MIME: Record<string, string> = {
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'app', privileges: { standard: true, secure: true } }]);
 
-function serveAppFiles(): void {
-  protocol.handle('app', async (request) => {
+function serveAppFiles(appSession: Session): void {
+  appSession.protocol.handle('app', async (request) => {
     const url = new URL(request.url);
     if (url.host !== 'benar') return new Response(null, { status: 404 });
     const relative = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
@@ -74,16 +78,19 @@ function isPermitted(requestUrl: string): boolean {
   return false;
 }
 
-function blockRequests(): void {
-  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+function blockRequests(appSession: Session): void {
+  appSession.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: !isPermitted(details.url) });
   });
   if (DEV_URL) {
-    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    appSession.webRequest.onHeadersReceived((details, callback) => {
       callback({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [DEV_POLICY] } });
     });
   }
-  session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  appSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
+  appSession.setPermissionCheckHandler(() => false);
+  // The app has no spell check: a spell check can download a dictionary.
+  appSession.setSpellCheckerEnabled(false);
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -100,6 +107,8 @@ function createWindow(): void {
     title: 'Benar',
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
+      partition: PARTITION,
+      spellcheck: false,
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -182,8 +191,11 @@ function serveBridge(): void {
 }
 
 void app.whenReady().then(() => {
-  serveAppFiles();
-  blockRequests();
+  // The window uses this session only. The default session gets no request, and it permits none.
+  session.defaultSession.webRequest.onBeforeRequest((_details, callback) => callback({ cancel: true }));
+  const appSession = session.fromPartition(PARTITION);
+  serveAppFiles(appSession);
+  blockRequests(appSession);
   serveBridge();
   installMenu(() => mainWindow);
   createWindow();

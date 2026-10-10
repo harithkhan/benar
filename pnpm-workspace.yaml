@@ -2,7 +2,6 @@
 hoistPattern:
   - '*'
 
-# pnpm stops an install on a build script that is not listed here.
-allowBuilds:
-  electron: true
-  esbuild: true
+# pnpm stops an install on a build script that `allowBuilds` does not list.
+# No dependency of this project has a build script, so the list is not here.
+# Electron downloads its binary on the first run, not at install time.
