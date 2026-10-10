@@ -77,5 +77,5 @@ export async function readTruth(file: string): Promise<OpenedTruth | null> {
 export async function pickedTruth(file: string): Promise<PickedTruth> {
   const { folder, stem } = splitPath(file);
   const json = (await readTruth(file))?.json ?? null;
-  return { folder, stem, sameFile: file === targetPath(folder, stem), json };
+  return { folder, stem, file: path.basename(file), sameFile: file === targetPath(folder, stem), json };
 }

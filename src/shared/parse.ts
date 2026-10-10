@@ -20,9 +20,9 @@ function list(value: unknown): unknown[] {
   return value;
 }
 
-/** A missing list loads as an empty list. */
+/** A missing or `null` list loads as an empty list. */
 function optionalList(value: unknown): unknown[] {
-  return value === undefined ? [] : list(value);
+  return value === undefined || value === null ? [] : list(value);
 }
 
 /** A missing or `null` text loads as an empty text. */
@@ -48,7 +48,7 @@ function party(value: unknown): Party {
     label: labelInner(text(raw['label'])),
     type: text(raw['type']),
     fullName: text(raw['fullName']),
-    aliases: raw['aliases'] === null ? [] : texts(raw['aliases']),
+    aliases: texts(raw['aliases']),
     idNumber: text(raw['idNumber']),
     definedTerm: text(raw['definedTerm']),
     ...(raw['idLabel'] === undefined ? {} : { idLabel: raw['idLabel'] }),
@@ -61,8 +61,10 @@ function contact(value: unknown, parties: readonly Party[]): Contact {
   const label = raw['party'];
   if (label !== undefined && label !== null) {
     if (typeof label !== 'string') throw new NotManual();
+    // Two parties of a file can have the same label in the comparison form. The party with the exact label comes first.
+    const inner = labelInner(label);
     const key = labelKey(label);
-    const owner = parties.find((candidate) => labelKey(candidate.label) === key);
+    const owner = parties.find((candidate) => candidate.label === inner) ?? parties.find((candidate) => labelKey(candidate.label) === key);
     if (owner) row.partyId = owner.id;
     else row.unknownParty = label;
   }

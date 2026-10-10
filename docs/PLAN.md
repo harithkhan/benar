@@ -33,11 +33,11 @@ benar/
   forge.config.ts  vite.main.config.ts  vite.preload.config.ts  vite.renderer.config.ts
   tailwind.preset.js  tailwind.config.js
   scripts/install-app.mjs
-  src/shared/    schema.ts  model.ts  serialise.ts  parse.ts  validate.ts  fill.ts  target.ts
+  src/shared/    schema.ts  model.ts  serialise.ts  parse.ts  validate.ts  fill.ts  target.ts  bridge.ts
   src/main/      main.ts  files.ts  menu.ts
   src/preload/   preload.ts
-  src/renderer/  index.html  main.tsx  App.tsx  style.css  state.ts  components/ui.tsx  sections/*.tsx
-  test/          *.test.ts
+  src/renderer/  index.html  main.tsx  App.tsx  style.css  state.ts  messages.ts  bridge.d.ts  components/ui.tsx  sections/*.tsx  sections/shared.ts
+  test/          *.test.ts  example.ts
 ```
 
 Scripts: `start` (`electron-forge start`), `package` (`electron-forge package`), `install:app`, `typecheck`, `test`, `verify` (typecheck, then test). No ESLint in this build.
@@ -142,7 +142,7 @@ A label is compared in this form: trim, remove one `[` at the start and one `]` 
 - A `redact` text is the `definedTerm` of a party.
 - No `<name>.docx` is in the target folder. `eval` does not score such a file.
 - A party has no `fullName`.
-- Two labels that are not the same label give the same slug (section 5), or a label gives an empty slug. `Add rows from intake` makes the entity ids from the slugs.
+- `Add rows from intake` (section 5) gives the same entity id to two rows of `intake` that are not one person or thing (for example a party and the ID number of another party; a row with a label error does not count, nor does a row that takes its entity id from it), or a label gives an empty slug.
 
 ### 4.5 A loaded file
 
@@ -169,11 +169,11 @@ A label is compared in this form: trim, remove one `[` at the start and one `]` 
 | An entry of `others` with no owner | the slug of its label, or its type + `-` + its number among the entries of that type | its type (`party` gives `person`) |
 | An entry of `others` with an owner | the entity of the owner + `-` + its type | its type |
 
-The ids depend on the intake only. So two files of one matter with the same intake get the same ids.
+The ids depend on the intake only. So two files of one matter with the same intake get the same ids. A label with an empty slug (no letter and no digit) gives an empty entity for each row that comes from it.
 
 ## 6. The main process and the bridge
 
-Window: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. Content policy `default-src 'self'`. The session cancels each request that is not for the app's own files (and the Vite dev server in `start`). No inline style.
+Window: `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`. Content policy `default-src 'self'`. The session cancels each request that is not for the app's own files (and the Vite dev server in `start`). No inline style. In `start` only, the policy also permits inline code and the socket of the Vite dev server.
 
 The preload gives the renderer these functions only:
 
@@ -181,7 +181,7 @@ The preload gives the renderer these functions only:
 | --- | --- |
 | `pickFolder()` | The Mac folder dialog. Returns the path or `null` |
 | `pickWordFile()` | The Mac file dialog, filter `.docx`. Returns `{ folder, stem }` from the path. It does not open the file |
-| `openTruth()` | The Mac file dialog, filter `.json`. Returns `{ folder, stem, sameFile, json }`. `sameFile` is true only when the picked file is the file that a Save of this folder and stem writes |
+| `openTruth()` | The Mac file dialog, filter `.json`. Returns `{ folder, stem, file, sameFile, json }`. `file` is the name of the picked file, for the top bar. `sameFile` is true only when the picked file is the file that a Save of this folder and stem writes |
 | `targetState(folder, stem)` | Returns `{ folderExists, truthExists, wordFileExists }` |
 | `saveTruth(folder, stem, json, replace)` | Writes `<stem>.truth.json.tmp` in the folder, then renames it. Refuses when the file exists and `replace` is false |
 | `setDirty(dirty)` | The main process asks before the window closes with unsaved changes |

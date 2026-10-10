@@ -216,6 +216,14 @@ describe('a loaded file', () => {
     expect(JSON.parse(serialise(state))[key]).toEqual([]);
   });
 
+  test.each(['alwaysKeep', 'keep', 'ownTitles'] as const)('a %s that is null loads as an empty list', (key) => {
+    const file = example();
+    file[key] = null;
+    const state = load(file);
+    expect(state[key]).toEqual([]);
+    expect(JSON.parse(serialise(state))[key]).toEqual([]);
+  });
+
   test('a file that starts with a byte order mark loads', () => {
     const state = load(`\uFEFF${text(EXAMPLE)}`);
     expect(serialise(state)).toBe(text(EXAMPLE));
@@ -307,6 +315,35 @@ describe('a loaded file', () => {
     file.intake.addresses[0].party = '[ party   a ]';
     const state = load(file);
     expect(state.addresses[0]!.partyId).toBe(state.parties[0]!.id);
+  });
+
+  test('a party label that two parties have is found by its exact text first', () => {
+    const file = example();
+    file.intake.parties[1].label = '[party a]';
+    file.intake.addresses = [
+      { text: 'Lot 8, Jalan Industri 2', party: '[party a]' },
+      { text: 'No. 12, Jalan Mawar 3', party: '[PARTY A]' },
+      { text: 'Peti Surat 55', party: ' [ party a ] ' },
+      { text: 'Peti Surat 77', party: '[Party  A]' },
+    ];
+    file.intake.phones = [{ text: '012-345 6789', party: '[party a]' }];
+    const state = load(file);
+    const [first, second] = state.parties;
+    expect(state.addresses.map((row) => row.partyId)).toEqual([second!.id, first!.id, second!.id, first!.id]);
+    expect(state.phones[0]!.partyId).toBe(second!.id);
+    const out = JSON.parse(serialise(state));
+    expect(out.intake.addresses.map((row: { party: string }) => row.party)).toEqual(['[party a]', '[PARTY A]', '[party a]', '[PARTY A]']);
+  });
+
+  test('an entry of others with an of to itself loads and does not change', () => {
+    const file = example();
+    file.intake.others = [
+      { type: 'person', text: 'Siti binti Hassan' },
+      { type: 'nric', text: '900101-01-1234', of: 1 },
+    ];
+    const state = load(file);
+    expect(state.others[1]!.ownerId).toBe(state.others[1]!.id);
+    expect(serialise(state)).toBe(text(file));
   });
 
   test('each row has an id of its own', () => {

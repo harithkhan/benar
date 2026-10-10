@@ -4,7 +4,9 @@ import { fillFromIntake } from '../src/shared/fill';
 import type { FormState } from '../src/shared/model';
 import { parse } from '../src/shared/parse';
 import { serialise } from '../src/shared/serialise';
-import { initialState, isDirty, pasteLines, reducer, type AppAction, type AppState } from '../src/renderer/state';
+import { cleanStem } from '../src/shared/target';
+import { validate } from '../src/shared/validate';
+import { entityIds, initialState, isDirty, pasteLines, reducer, shownTargetState, type AppAction, type AppState, type FoundTarget, type Target } from '../src/renderer/state';
 import { EXAMPLE, example, text } from './example';
 
 function load(value: unknown = EXAMPLE): FormState {
@@ -14,7 +16,7 @@ function load(value: unknown = EXAMPLE): FormState {
 }
 
 function opened(value: unknown = EXAMPLE): AppState {
-  return reducer(initialState(), { type: 'opened', form: load(value), folder: '/scratch/matter-1', stem: 'statement', sameFile: true });
+  return reducer(initialState(), { type: 'opened', form: load(value), folder: '/scratch/matter-1', stem: 'statement', file: 'statement.truth.json', sameFile: true });
 }
 
 /** The example with a person and the NRIC of that person in `others`. */
@@ -48,7 +50,7 @@ describe('the reducer', () => {
     expect(isDirty(state)).toBe(false);
     const changed = run(state, { type: 'batch', value: 'matter-2' });
     expect(isDirty(changed)).toBe(true);
-    const saved = run(changed, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(changed.form) });
+    const saved = run(changed, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(changed.form), formNo: changed.formNo });
     expect(isDirty(saved)).toBe(false);
     expect(saved.opened).toEqual({ folder: '/scratch/matter-1', stem: 'statement' });
   });
@@ -56,7 +58,7 @@ describe('the reducer', () => {
   test('a change that came after the save stays a change', () => {
     const state = opened();
     const json = serialise(state.form);
-    const later = run(state, { type: 'batch', value: 'matter-2' }, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json });
+    const later = run(state, { type: 'batch', value: 'matter-2' }, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json, formNo: state.formNo });
     expect(isDirty(later)).toBe(true);
   });
 
@@ -179,13 +181,14 @@ describe('the reducer', () => {
       { type: 'remove', list: 'keep', id: 'case' },
       { type: 'folder', value: '/scratch/matter-2' },
       { type: 'name', value: 'affidavit' },
+      { type: 'pickedFolder', value: '/scratch/matter-2' },
       { type: 'target', folder: '/scratch/matter-2', name: 'affidavit' },
       { type: 'filled', ...fillFromIntake(form) },
       { type: 'new' },
-      { type: 'opened', form, folder: '/scratch/matter-2', stem: 'affidavit', sameFile: true },
+      { type: 'opened', form, folder: '/scratch/matter-2', stem: 'affidavit', file: 'affidavit.truth.json', sameFile: true },
       { type: 'fromMatter', source: form, folder: '/scratch/matter-2' },
       { type: 'nextFile' },
-      { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(form) },
+      { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(form), formNo: state.formNo },
     ];
 
     test.each(actions.map((action, n) => [n, action.type, action] as const))('action %i: %s', (_n, _type, action) => {
@@ -226,7 +229,7 @@ describe('the reducer', () => {
     expect(filled.form.redact).toHaveLength(9);
     expect(isDirty(filled)).toBe(true);
     expect(run(filled, { type: 'new' }).fillNote).toBeNull();
-    expect(run(filled, { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', sameFile: true }).fillNote).toBeNull();
+    expect(run(filled, { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', file: 'statement.truth.json', sameFile: true }).fillNote).toBeNull();
   });
 
   test('the next file two times collects the entity ids of both files', () => {
@@ -286,21 +289,239 @@ describe('the reducer', () => {
   });
 
   test('an open of the file that Save writes makes that file the opened file', () => {
-    const state = run(initialState(), { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', sameFile: true });
+    const state = run(initialState(), { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', file: 'statement.truth.json', sameFile: true });
     expect(state.opened).toEqual({ folder: '/scratch/matter-1', stem: 'statement' });
     expect(isDirty(state)).toBe(false);
   });
 
   test('an open of a file that Save does not write gives no opened file', () => {
     // For example `statement.json`: Save writes `statement.truth.json`, and that is another file.
-    const state = run(initialState(), { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', sameFile: false });
+    const state = run(initialState(), { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', file: 'statement.json', sameFile: false });
     expect(state.opened).toBeNull();
     expect(state.folder).toBe('/scratch/matter-1');
     expect(state.name).toBe('statement');
     expect(file(state)).toEqual(EXAMPLE);
     expect(isDirty(state)).toBe(false);
     // The save makes the target the file of the form.
-    const saved = run(state, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(state.form) });
+    const saved = run(state, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(state.form), formNo: state.formNo });
     expect(saved.opened).toEqual({ folder: '/scratch/matter-1', stem: 'statement' });
   });
+
+  test('when a party goes, its emails change to no party', () => {
+    const source = example();
+    source.intake.emails = [
+      { text: 'tan@example.test', party: '[PARTY A]' },
+      { text: 'bayu@example.test', party: '[PARTY B]' },
+    ];
+    const state = opened(source);
+    const next = run(state, { type: 'remove', list: 'parties', id: state.form.parties[0]!.id });
+    expect(file(next).intake.emails).toEqual([
+      { text: 'tan@example.test', party: null },
+      { text: 'bayu@example.test', party: '[PARTY B]' },
+    ]);
+  });
+
+  test('a space at the end of the folder text is not a change', () => {
+    const state = opened();
+    expect(isDirty(run(state, { type: 'folder', value: '/scratch/matter-1 ' }))).toBe(false);
+    expect(isDirty(run(state, { type: 'folder', value: ' /scratch/matter-1\t' }))).toBe(false);
+    expect(isDirty(run(state, { type: 'folder', value: '/scratch/matter-2 ' }))).toBe(true);
+  });
+
+  test('the entity ids of the rows: no space at the ends, no empty id, each id one time, in order', () => {
+    const row = (entity: string) => ({ id: entity, text: 'Tan Ah Kow', entity, expect: 'entered', type: 'party' });
+    expect(entityIds([row(' p-tan '), row('c-bayu'), row('p-tan'), row(''), row('   '), row('P-tan')])).toEqual(['P-tan', 'c-bayu', 'p-tan']);
+    expect(entityIds([row('p-tan')], ['w-rajesh', 'c-bayu', 'p-tan', ''])).toEqual(['c-bayu', 'p-tan', 'w-rajesh']);
+    expect(entityIds([])).toEqual([]);
+  });
 });
+
+describe('the name of the file in the top bar', () => {
+  const open = (file: string, sameFile: boolean) => run(initialState(), { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', file, sameFile });
+
+  test('a new file has no name', () => {
+    expect(initialState().fileName).toBeNull();
+  });
+
+  test('an open of the file that Save writes gives the name of that file', () => {
+    expect(open('statement.truth.json', true).fileName).toBe('statement.truth.json');
+  });
+
+  test.each(['statement.json', 'statement.TRUTH.JSON'])('an open of a file that Save does not write gives the name of the picked file: %s', (name) => {
+    const state = open(name, false);
+    expect(state.fileName).toBe(name);
+    // Save still asks before it replaces `statement.truth.json`, and the form has no unsaved change.
+    expect(state.opened).toBeNull();
+    expect(isDirty(state)).toBe(false);
+  });
+
+  test('a save gives the name of the file that the save wrote', () => {
+    const state = open('statement.json', false);
+    const saved = run(state, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(state.form), formNo: state.formNo });
+    expect(saved.fileName).toBe('statement.truth.json');
+
+    const first = run(initialState(), { type: 'target', folder: '/scratch/matter-1', name: 'affidavit.docx' });
+    expect(first.fileName).toBeNull();
+    expect(run(first, { type: 'saved', folder: '/scratch/matter-1', stem: 'affidavit', json: serialise(first.form), formNo: first.formNo }).fileName).toBe('affidavit.truth.json');
+  });
+
+  test('a change of the form, the folder or the name keeps the name of the file', () => {
+    const state = run(open('statement.json', false), { type: 'batch', value: 'matter-2' }, { type: 'folder', value: '/scratch/matter-2' }, { type: 'name', value: 'affidavit' }, { type: 'pickedFolder', value: '/scratch/matter-3' });
+    expect(state.fileName).toBe('statement.json');
+    expect(isDirty(state)).toBe(true);
+  });
+
+  test.each<[string, AppAction]>([
+    ['New', { type: 'new' }],
+    ['New from same matter', { type: 'fromMatter', source: load(), folder: '/scratch/matter-1' }],
+    ['the next file', { type: 'nextFile' }],
+  ])('%s clears the name', (_name, action) => {
+    expect(run(open('statement.truth.json', true), action).fileName).toBeNull();
+    expect(run(open('statement.json', false), action).fileName).toBeNull();
+  });
+});
+
+describe('a save result that comes late', () => {
+  const others: [string, AppAction][] = [
+    ['New', { type: 'new' }],
+    ['an open', { type: 'opened', form: load(), folder: '/scratch/matter-2', stem: 'affidavit', file: 'affidavit.truth.json', sameFile: true }],
+    ['New from same matter', { type: 'fromMatter', source: load(), folder: '/scratch/matter-1' }],
+    ['the next file', { type: 'nextFile' }],
+  ];
+
+  test.each(others)('after %s, the result of a save of the form before it changes nothing', (_name, action) => {
+    const before = run(opened(), { type: 'batch', value: 'matter-2' });
+    const saved: AppAction = { type: 'saved', folder: before.folder, stem: cleanStem(before.name), json: serialise(before.form), formNo: before.formNo };
+    const next = run(before, action);
+    expect(next.formNo).not.toBe(before.formNo);
+    expect(reducer(next, saved)).toBe(next);
+  });
+
+  test('an open of the same file again is another form', () => {
+    const before = run(opened(), { type: 'batch', value: 'matter-2' });
+    const again = run(before, { type: 'opened', form: load(), folder: '/scratch/matter-1', stem: 'statement', file: 'statement.truth.json', sameFile: true }, { type: 'batch', value: 'matter-3' });
+    const late = run(again, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(before.form), formNo: before.formNo });
+    expect(late).toBe(again);
+    expect(isDirty(late)).toBe(true);
+  });
+
+  test('a change of the rows, the folder or the name is not another form', () => {
+    const before = opened();
+    const later = run(before, { type: 'batch', value: 'matter-2' }, { type: 'folder', value: '/scratch/matter-2' }, { type: 'name', value: 'affidavit' }, { type: 'pickedFolder', value: '/scratch/matter-3' }, { type: 'target', folder: '/scratch/matter-4', name: 'reply' });
+    expect(later.formNo).toBe(before.formNo);
+    const saved = run(later, { type: 'saved', folder: '/scratch/matter-1', stem: 'statement', json: serialise(before.form), formNo: before.formNo });
+    expect(saved.opened).toEqual({ folder: '/scratch/matter-1', stem: 'statement' });
+    // The form has another target and another batch now.
+    expect(isDirty(saved)).toBe(true);
+  });
+
+  test('each new form has a number that no form before it had', () => {
+    const numbers = [initialState()];
+    for (const [, action] of [...others, ...others]) numbers.push(run(numbers.at(-1)!, action));
+    expect(new Set(numbers.map((state) => state.formNo)).size).toBe(numbers.length);
+  });
+});
+
+describe('the state of the disk that the form shows', () => {
+  const MISSING = { folderExists: false, truthExists: false, wordFileExists: false };
+  const NO_WORD_FILE = { folderExists: true, truthExists: true, wordFileExists: false };
+
+  const targetOf = (state: AppState): Target => ({ folder: state.folder, stem: cleanStem(state.name), targetNo: state.targetNo });
+  const resultFor = (state: AppState, found: FoundTarget['state']): FoundTarget => ({ ...targetOf(state), state: found });
+  /** The problems of the disk that the form shows, as `App` gets them. */
+  const diskProblems = (state: AppState, last: FoundTarget | null) => {
+    const found = shownTargetState(targetOf(state), last);
+    const target = { folder: state.folder, stem: cleanStem(state.name), folderExists: found?.folderExists ?? true, wordFileExists: found?.wordFileExists ?? true };
+    return validate(state.form, target)
+      .map((problem) => problem.code)
+      .filter((code) => code === 'target-folder-missing' || code === 'no-word-file');
+  };
+
+  // Each command that gives the form a new target.
+  const commands: [string, AppAction][] = [
+    ['Open', { type: 'opened', form: load(), folder: '/scratch/matter-2', stem: 'affidavit', file: 'affidavit.truth.json', sameFile: true }],
+    ['Browse', { type: 'pickedFolder', value: '/scratch/matter-2' }],
+    ['Take from a Word file', { type: 'target', folder: '/scratch/matter-2', name: 'affidavit' }],
+    ['New', { type: 'new' }],
+    ['New from same matter', { type: 'fromMatter', source: load(), folder: '/scratch/matter-2' }],
+    ['the next file', { type: 'nextFile' }],
+  ];
+
+  test('with no result, the form shows no state', () => {
+    expect(shownTargetState(targetOf(opened()), null)).toBeNull();
+    expect(diskProblems(opened(), null)).toEqual([]);
+  });
+
+  test('the result for the target of the form is the state', () => {
+    const state = opened();
+    expect(shownTargetState(targetOf(state), resultFor(state, MISSING))).toBe(MISSING);
+    expect(diskProblems(state, resultFor(state, MISSING))).toEqual(['target-folder-missing']);
+    expect(diskProblems(state, resultFor(state, NO_WORD_FILE))).toEqual(['no-word-file']);
+  });
+
+  describe.each(commands)('after %s', (_name, command) => {
+    test.each([
+      ['a folder that does not exist', MISSING],
+      ['no Word file', NO_WORD_FILE],
+    ])('an old result of %s gives no state and no problem', (_what, found) => {
+      const before = opened();
+      const last = resultFor(before, found);
+      const next = run(before, command);
+      expect(shownTargetState(targetOf(next), last)).toBeNull();
+      expect(diskProblems(next, last)).toEqual([]);
+    });
+
+    test('an old result gives no state when the user types before the new result comes', () => {
+      const before = opened();
+      const last = resultFor(before, MISSING);
+      const next = run(before, command, { type: 'folder', value: '/scratch/matter-3' }, { type: 'name', value: 'reply' });
+      expect(shownTargetState(targetOf(next), last)).toBeNull();
+    });
+
+    test('the result for the new target is the state', () => {
+      const next = run(opened(), command);
+      expect(shownTargetState(targetOf(next), resultFor(next, MISSING))).toBe(MISSING);
+    });
+  });
+
+  test('while the user types in the folder field, the form shows the last result', () => {
+    const before = run(opened(), { type: 'folder', value: '/scratch/matter' });
+    const last = resultFor(before, MISSING);
+    let state = before;
+    for (const value of ['/scratch/matter-', '/scratch/matter-2', '/scratch/matter-2/', '/scratch/matter-2/a']) {
+      state = run(state, { type: 'folder', value });
+      expect(shownTargetState(targetOf(state), last)).toBe(MISSING);
+      expect(diskProblems(state, last)).toEqual(['target-folder-missing']);
+    }
+    // The new result replaces the last one.
+    const found = resultFor(state, NO_WORD_FILE);
+    expect(shownTargetState(targetOf(state), found)).toBe(NO_WORD_FILE);
+    expect(diskProblems(state, found)).toEqual(['no-word-file']);
+  });
+
+  test('while the user types in the name field, the form shows the last result', () => {
+    const before = opened();
+    const last = resultFor(before, NO_WORD_FILE);
+    let state = before;
+    for (const value of ['statement-', 'statement-2', 'statement-2.docx']) {
+      state = run(state, { type: 'name', value });
+      expect(shownTargetState(targetOf(state), last)).toBe(NO_WORD_FILE);
+      expect(diskProblems(state, last)).toEqual(['no-word-file']);
+    }
+  });
+
+  test('a change of the rows does not change the target', () => {
+    const before = opened();
+    const next = run(before, { type: 'batch', value: 'matter-2' }, { type: 'addParty', id: 'new' }, { type: 'saved', folder: before.folder, stem: 'statement', json: serialise(before.form), formNo: before.formNo });
+    expect(targetOf(next)).toEqual(targetOf(before));
+  });
+
+  test('a command that gives the same folder and name keeps the result of that target', () => {
+    const before = opened();
+    const last = resultFor(before, NO_WORD_FILE);
+    const again = run(before, { type: 'target', folder: before.folder, name: 'statement.docx' });
+    expect(again.targetNo).not.toBe(before.targetNo);
+    expect(shownTargetState(targetOf(again), last)).toBe(NO_WORD_FILE);
+  });
+});
+

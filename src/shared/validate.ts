@@ -1,4 +1,5 @@
-import { labelInner, labelKey, slug, textKey, type ContactList, type FormState, type Other } from './model';
+import { proposedRows } from './fill';
+import { labelInner, labelKey, slug, textKey, type ContactList, type FormState, type Other, type Party } from './model';
 import { EXPECT_VALUES, ID_TYPES, NAME_TYPES, PARTY_TYPE_VALUES, TYPE_VALUES } from './schema';
 import { isStemValid } from './target';
 
@@ -38,9 +39,9 @@ export type WarningCode =
   | 'redact-defined-term'
   | 'no-word-file'
   | 'party-no-name'
-  | 'party-label-slug-shared'
+  | 'party-entity-shared'
   | 'party-label-slug-empty'
-  | 'other-label-slug-shared'
+  | 'other-entity-shared'
   | 'other-label-slug-empty';
 
 export type Code = ErrorCode | WarningCode;
@@ -81,29 +82,60 @@ export function validate(state: FormState, target: TargetInfo): Problem[] {
   if (target.folderExists && stemValid && !target.wordFileExists) warning('file', null, 'no-word-file');
   if (state.batchOn && state.batch.trim() === '') warning('file', null, 'batch-empty');
 
-  // The slug of a label is the entity id of `Add rows from intake`. Two labels
-  // that are not the same label must not give the same slug.
-  const slugKeys = new Map<string, Set<string>>();
-  for (const label of [...state.parties.map((party) => party.label), ...state.others.map((other) => other.label)]) {
-    if (label === null) continue;
-    const keys = slugKeys.get(slug(label)) ?? new Set<string>();
-    slugKeys.set(slug(label), keys.add(labelKey(label)));
-  }
-  const slugShared = (label: string): boolean => slug(label) !== '' && (slugKeys.get(slug(label))?.size ?? 0) > 1;
-  const slugEmpty = (label: string): boolean => labelKey(label) !== '' && !hasBracket(label) && slug(label) === '';
-
-  // Parties.
+  // The error of the label of a party, and of an entry of `others`.
   const partyKeys = new Map<string, number>();
   for (const party of state.parties) {
     const key = labelKey(party.label);
     partyKeys.set(key, (partyKeys.get(key) ?? 0) + 1);
   }
-  for (const party of state.parties) {
+  const partyLabelError = (party: Party): ErrorCode | undefined => {
     const key = labelKey(party.label);
-    if (key === '') error('parties', party.id, 'party-label-empty');
-    else if (hasBracket(party.label)) error('parties', party.id, 'party-label-bracket');
-    else if ((partyKeys.get(key) ?? 0) > 1) error('parties', party.id, 'party-label-duplicate');
-    if (slugShared(party.label)) warning('parties', party.id, 'party-label-slug-shared');
+    if (key === '') return 'party-label-empty';
+    if (hasBracket(party.label)) return 'party-label-bracket';
+    return (partyKeys.get(key) ?? 0) > 1 ? 'party-label-duplicate' : undefined;
+  };
+  const otherById = new Map(state.others.map((other) => [other.id, other]));
+  const otherIds = new Set(otherById.keys());
+  const otherLabelError = (other: Other): ErrorCode | undefined => {
+    if (other.label === null) return undefined;
+    const key = labelKey(other.label);
+    if (key === '') return 'other-label-empty';
+    if (hasBracket(other.label)) return 'other-label-bracket';
+    if (partyKeys.has(key)) return 'other-label-is-party';
+    const clash = state.others.some(
+      (peer) =>
+        peer.id !== other.id &&
+        peer.label !== null &&
+        labelKey(peer.label) === key &&
+        (sharedType(peer.type) !== sharedType(other.type) || hasOf(peer, otherIds) || hasOf(other, otherIds)),
+    );
+    return clash ? 'other-label-shared' : undefined;
+  };
+
+  // `Add rows from intake` must not give one entity id to two things. A row
+  // with a label error is not in this check: the user must correct the label
+  // first. A row that takes its entity id from such a row is not in the check
+  // either: an address, email or phone of that party, and an entry of `others`
+  // that the entry owns. A row that the fill proposes with an empty text is in
+  // the check.
+  const labelErrors = new Set([...state.parties.filter(partyLabelError), ...state.others.filter(otherLabelError)].map((row) => row.id));
+  const fromLabelError = (id: string | null): boolean => id !== null && labelErrors.has(id);
+  const leftOut = new Set([
+    ...labelErrors,
+    ...[...state.addresses, ...state.emails, ...state.phones].filter((row) => fromLabelError(row.partyId)).map((row) => row.id),
+    ...state.others.filter((other) => fromLabelError(other.ownerId)).map((other) => other.id),
+  ]);
+  const proposed = proposedRows(state).filter((row) => row.entity !== '' && !leftOut.has(row.source.rowId));
+  const thingsOf = new Map<string, Set<string>>();
+  for (const row of proposed) thingsOf.set(row.entity, (thingsOf.get(row.entity) ?? new Set<string>()).add(row.thing));
+  const entityShared = new Set(proposed.filter((row) => thingsOf.get(row.entity)!.size > 1).map((row) => row.source.rowId));
+  const slugEmpty = (label: string): boolean => labelKey(label) !== '' && !hasBracket(label) && slug(label) === '';
+
+  // Parties.
+  for (const party of state.parties) {
+    const labelError = partyLabelError(party);
+    if (labelError) error('parties', party.id, labelError);
+    if (entityShared.has(party.id)) warning('parties', party.id, 'party-entity-shared');
     if (slugEmpty(party.label)) warning('parties', party.id, 'party-label-slug-empty');
     if (!PARTY_TYPE_VALUES.has(party.type)) error('parties', party.id, 'party-type');
     if (party.fullName.trim() === '') warning('parties', party.id, 'party-no-name');
@@ -119,8 +151,6 @@ export function validate(state: FormState, target: TargetInfo): Problem[] {
   }
 
   // Other people and identifiers.
-  const otherById = new Map(state.others.map((other) => [other.id, other]));
-  const otherIds = new Set(otherById.keys());
   for (const other of state.others) {
     if (!TYPE_VALUES.has(other.type)) error('others', other.id, 'other-type');
 
@@ -135,24 +165,10 @@ export function validate(state: FormState, target: TargetInfo): Problem[] {
       }
     }
 
-    if (other.label !== null) {
-      const key = labelKey(other.label);
-      if (key === '') error('others', other.id, 'other-label-empty');
-      else if (hasBracket(other.label)) error('others', other.id, 'other-label-bracket');
-      else if (partyKeys.has(key)) error('others', other.id, 'other-label-is-party');
-      else {
-        const clash = state.others.some(
-          (peer) =>
-            peer.id !== other.id &&
-            peer.label !== null &&
-            labelKey(peer.label) === key &&
-            (sharedType(peer.type) !== sharedType(other.type) || hasOf(peer, otherIds) || hasOf(other, otherIds)),
-        );
-        if (clash) error('others', other.id, 'other-label-shared');
-      }
-      if (slugShared(other.label)) warning('others', other.id, 'other-label-slug-shared');
-      if (slugEmpty(other.label)) warning('others', other.id, 'other-label-slug-empty');
-    }
+    const labelError = otherLabelError(other);
+    if (labelError) error('others', other.id, labelError);
+    if (entityShared.has(other.id)) warning('others', other.id, 'other-entity-shared');
+    if (other.label !== null && slugEmpty(other.label)) warning('others', other.id, 'other-label-slug-empty');
   }
 
   // Redact.

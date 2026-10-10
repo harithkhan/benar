@@ -226,6 +226,15 @@ describe('warnings', () => {
     expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'redact', rowId: row.id, code: 'redact-duplicate' }]);
   });
 
+  test('the warning for the same text is on each later row, and not on the first row', () => {
+    const state = load();
+    const later = ['Tan Ah Kow', 'TAN AH KOW'].map((text) => ({ id: newId(), text, entity: 'p-tan', expect: 'entered', type: 'party' }));
+    state.redact.push(...later);
+    const problems = validate(state, TARGET);
+    expect(problems).toEqual(later.map((row) => ({ level: 'warning', section: 'redact', rowId: row.id, code: 'redact-duplicate' })));
+    expect(problems.map((problem) => problem.rowId)).not.toContain(state.redact[0]!.id);
+  });
+
   test('the same text with another kind of quote and dash is the same text', () => {
     const state = load();
     state.redact[0]!.text = 'Tan’s "Kedai" 2010–2012';
@@ -261,16 +270,16 @@ describe('warnings', () => {
     const state = load();
     state.parties[1]!.label = '[PARTY-A]';
     expect(validate(state, TARGET)).toEqual([
-      { level: 'warning', section: 'parties', rowId: state.parties[0]!.id, code: 'party-label-slug-shared' },
-      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-label-slug-shared' },
+      { level: 'warning', section: 'parties', rowId: state.parties[0]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' },
     ]);
   });
 
   test('a party label and a label of an entry of others give the same slug', () => {
     const state = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[PARTY-B]' }]);
     expect(validate(state, TARGET)).toEqual([
-      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-label-slug-shared' },
-      { level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-label-slug-shared' },
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-entity-shared' },
     ]);
   });
 
@@ -282,8 +291,135 @@ describe('warnings', () => {
       { type: 'person', text: 'Rajesh a/l Muniandy', label: '[WITNESS 1]' },
     ]);
     expect(validate(state, TARGET)).toEqual(
-      state.others.slice(0, 3).map((other) => ({ level: 'warning', section: 'others', rowId: other.id, code: 'other-label-slug-shared' })),
+      state.others.slice(0, 3).map((other) => ({ level: 'warning', section: 'others', rowId: other.id, code: 'other-entity-shared' })),
     );
+  });
+
+  test('the ID number of a party and the name of another party get the same entity id', () => {
+    const state = load();
+    state.parties[1]!.label = '[PARTY A ID]';
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'warning', section: 'parties', rowId: state.parties[0]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' },
+    ]);
+  });
+
+  test('a row that the fill proposes with an empty text is in the check of the entity ids', () => {
+    const state = load();
+    state.parties[0]!.idNumber = '';
+    state.parties[1]!.label = '[PARTY A ID]';
+    expect(codes(validate(state, TARGET), 'warning')).toEqual(['party-entity-shared', 'party-entity-shared']);
+  });
+
+  test('an entry of others with no label and the label of another entry get the same entity id', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan' },
+      { type: 'person', text: 'Lim Mei Ling', label: '[PERSON 1]' },
+    ]);
+    expect(validate(state, TARGET)).toEqual(state.others.map((other) => ({ level: 'warning', section: 'others', rowId: other.id, code: 'other-entity-shared' })));
+  });
+
+  test('an entry of others of type address with no label and an address with no party get the same entity id', () => {
+    const file = example();
+    file.intake.addresses.push({ text: 'Peti Surat 55', party: null });
+    file.intake.others = [{ type: 'address', text: 'Lot 8, Jalan Industri 2' }];
+    const state = load(file);
+    // The address gets no warning of its own.
+    expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-entity-shared' }]);
+  });
+
+  test('an entry of others with an owner and a party get the same entity id', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'nric', text: '900101-01-1234', of: 0 },
+    ]);
+    state.parties[1]!.label = '[SECRETARY 1 NRIC]';
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'others', rowId: state.others[1]!.id, code: 'other-entity-shared' },
+    ]);
+  });
+
+  test('rows that share an entity id by the fill table get no warning', () => {
+    const file = example();
+    file.intake.addresses = [
+      { text: 'No. 12, Jalan Mawar 3,\nTaman Bunga Raya,\n43000 Kajang, Selangor', party: '[PARTY A]' },
+      { text: 'Peti Surat 55,\n43000 Kajang', party: null },
+    ];
+    file.intake.others = [
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'party', text: 'Cik Siti', label: '[secretary  1]' },
+      { type: 'child', text: 'Aiman bin Tan' },
+      { type: 'nric', text: '100101-10-1234', of: 2 },
+      { type: 'nric', text: '100101101234', of: 2 },
+    ];
+    expect(validate(load(file), TARGET)).toEqual([]);
+  });
+
+  test('a party with a label error gives no warning for the entity id, to itself or to another row', () => {
+    const bracket = load();
+    bracket.parties[0]!.label = 'PARTY [A';
+    bracket.parties[1]!.label = '[PARTY A]';
+    expect(validate(bracket, TARGET)).toEqual([{ level: 'error', section: 'parties', rowId: bracket.parties[0]!.id, code: 'party-label-bracket' }]);
+
+    const duplicate = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[PARTY-A]' }]);
+    duplicate.parties[1]!.label = '[party a]';
+    const problems = validate(duplicate, TARGET);
+    expect(codes(problems, 'error')).toEqual(['party-label-duplicate', 'party-label-duplicate']);
+    expect(codes(problems, 'warning')).toEqual([]);
+  });
+
+  test('an entry of others with a label error gives no warning for the entity id, to itself or to another row', () => {
+    const bracket = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: 'PARTY ]B' }]);
+    expect(validate(bracket, TARGET)).toEqual([{ level: 'error', section: 'others', rowId: bracket.others[0]!.id, code: 'other-label-bracket' }]);
+
+    const isParty = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[party a]' },
+      { type: 'person', text: 'Lim Mei Ling', label: '[PARTY-A]' },
+    ]);
+    isParty.parties[0]!.label = '[PARTY  A]';
+    const first = validate(isParty, TARGET);
+    expect(codes(first, 'error')).toEqual(['other-label-is-party']);
+    // The party and the second entry are correct rows. They still share an entity id.
+    expect(first.filter((problem) => problem.level === 'warning')).toEqual([
+      { level: 'warning', section: 'parties', rowId: isParty.parties[0]!.id, code: 'party-entity-shared' },
+      { level: 'warning', section: 'others', rowId: isParty.others[1]!.id, code: 'other-entity-shared' },
+    ]);
+
+    const shared = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'company', text: 'Siti Enterprise', label: '[SECRETARY 1]' },
+      { type: 'person', text: 'Lim Mei Ling', label: '[SECRETARY-1]' },
+    ]);
+    const second = validate(shared, TARGET);
+    expect(codes(second, 'error')).toEqual(['other-label-shared', 'other-label-shared']);
+    expect(codes(second, 'warning')).toEqual([]);
+  });
+
+  test('an address of a party with a label error gives no warning for the entity id to another row', () => {
+    // The address of the example takes its entity id from the label of the first party.
+    const state = load();
+    state.parties[0]!.label = 'PARTY [A';
+    state.parties[1]!.label = '[PARTY A ADDRESS]';
+    expect(validate(state, TARGET)).toEqual([{ level: 'error', section: 'parties', rowId: state.parties[0]!.id, code: 'party-label-bracket' }]);
+
+    // With a correct label, the same rows share an entity id.
+    state.parties[0]!.label = '[PARTY A]';
+    expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-entity-shared' }]);
+  });
+
+  test('an entry of others whose owner has a label error gives no warning for the entity id to another row', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'nric', text: '900101-01-1234', of: 0 },
+      { type: 'person', text: 'Lim Mei Ling', label: '[SECRETARY 1 NRIC]' },
+    ]);
+    state.others[0]!.label = 'SECRETARY [1';
+    expect(validate(state, TARGET)).toEqual([{ level: 'error', section: 'others', rowId: state.others[0]!.id, code: 'other-label-bracket' }]);
+
+    // With a correct label, the same rows share an entity id.
+    state.others[0]!.label = '[SECRETARY 1]';
+    expect(validate(state, TARGET)).toEqual(state.others.slice(1).map((other) => ({ level: 'warning', section: 'others', rowId: other.id, code: 'other-entity-shared' })));
   });
 
   test('labels that are the same label get no warning for the slug', () => {

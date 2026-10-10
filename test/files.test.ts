@@ -195,21 +195,28 @@ describe('readTruth', () => {
 describe('pickedTruth', () => {
   test('the file that a save writes is the same file', async () => {
     await saveTruth(folder, 'statement', JSON_TEXT, false);
-    expect(await pickedTruth(path.join(folder, 'statement.truth.json'))).toEqual({ folder, stem: 'statement', sameFile: true, json: JSON_TEXT });
+    expect(await pickedTruth(path.join(folder, 'statement.truth.json'))).toEqual({ folder, stem: 'statement', file: 'statement.truth.json', sameFile: true, json: JSON_TEXT });
   });
 
   test('a file with the ending .json only is not the file that a save writes', async () => {
     await saveTruth(folder, 'statement', '{"first":true}\n', false);
     await writeFile(path.join(folder, 'statement.json'), JSON_TEXT);
-    expect(await pickedTruth(path.join(folder, 'statement.json'))).toEqual({ folder, stem: 'statement', sameFile: false, json: JSON_TEXT });
+    expect(await pickedTruth(path.join(folder, 'statement.json'))).toEqual({ folder, stem: 'statement', file: 'statement.json', sameFile: false, json: JSON_TEXT });
   });
 
   test('an ending in capital letters is not the file that a save writes', async () => {
     await writeFile(path.join(folder, 'statement.TRUTH.JSON'), JSON_TEXT);
-    expect(await pickedTruth(path.join(folder, 'statement.TRUTH.JSON'))).toEqual({ folder, stem: 'statement', sameFile: false, json: JSON_TEXT });
+    expect(await pickedTruth(path.join(folder, 'statement.TRUTH.JSON'))).toEqual({ folder, stem: 'statement', file: 'statement.TRUTH.JSON', sameFile: false, json: JSON_TEXT });
   });
 
   test('a file that the app cannot read gives no text', async () => {
-    expect(await pickedTruth(path.join(folder, 'missing.json'))).toEqual({ folder, stem: 'missing', sameFile: false, json: null });
+    expect(await pickedTruth(path.join(folder, 'missing.json'))).toEqual({ folder, stem: 'missing', file: 'missing.json', sameFile: false, json: null });
+  });
+
+  test('the name of the picked file is the last part of the path, with its ending as it stands', async () => {
+    // The stem does not say which of these files the user picked.
+    for (const name of ['statement.truth.json', 'statement.json', 'statement.TRUTH.JSON', 'statement.Json', 'statement.docx.json']) {
+      expect((await pickedTruth(path.join(folder, name))).file).toBe(name);
+    }
   });
 });

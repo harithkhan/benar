@@ -4,13 +4,13 @@ import { Button, FILE_KEY, type FieldName } from '../components/ui';
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
 
 /** The control that each problem is about. The control has the name in `data-field`. */
-const FIELD_OF: Record<Code, FieldName> = {
+export const FIELD_OF: Record<Code, FieldName> = {
   'party-label-empty': 'label',
   'party-label-bracket': 'label',
   'party-label-duplicate': 'label',
   'party-type': 'type',
   'party-no-name': 'fullName',
-  'party-label-slug-shared': 'label',
+  'party-entity-shared': 'label',
   'party-label-slug-empty': 'label',
   'contact-unknown-party': 'party',
   'other-type': 'type',
@@ -23,7 +23,7 @@ const FIELD_OF: Record<Code, FieldName> = {
   'other-label-bracket': 'label',
   'other-label-is-party': 'label',
   'other-label-shared': 'label',
-  'other-label-slug-shared': 'label',
+  'other-entity-shared': 'label',
   'other-label-slug-empty': 'label',
   'redact-text-empty': 'text',
   'redact-entity-empty': 'entity',
@@ -50,7 +50,7 @@ export function goToProblem(problem: Problem): void {
 
 interface Props {
   problems: readonly Problem[];
-  /** Not given while Save is not available: a save is in progress, or the app does not know the state of the target. */
+  /** Not given while Save is not available: a save is in progress. */
   onSave?: () => void;
 }
 

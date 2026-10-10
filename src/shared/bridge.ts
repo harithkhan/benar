@@ -13,6 +13,8 @@ export type SaveResult = { ok: true } | { ok: false; reason: 'exists' | 'bad-nam
 export interface PickedTruth {
   folder: string;
   stem: string;
+  /** The name of the picked file, with its ending and with no folder. */
+  file: string;
   /** `true` only when a save of this folder and stem writes the picked file. */
   sameFile: boolean;
   /** `null` when the app cannot read the file. */

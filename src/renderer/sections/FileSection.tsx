@@ -19,7 +19,7 @@ export function FileSection({ form, folder, name, stem, problems, dispatch }: Pr
 
   const browse = async () => {
     const picked = await window.benar.pickFolder();
-    if (picked !== null) dispatch({ type: 'folder', value: picked });
+    if (picked !== null) dispatch({ type: 'pickedFolder', value: picked });
   };
   const takeFromWordFile = async () => {
     const picked = await window.benar.pickWordFile();

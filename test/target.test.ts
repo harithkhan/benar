@@ -15,6 +15,7 @@ describe('the save target', () => {
     ['statement.truth', 'statement.truth'],
     ['.truth.json', ''],
     ['', ''],
+    ['   ', ''],
   ])('the name %j gives the stem %j', (name, stem) => {
     expect(cleanStem(name)).toBe(stem);
   });

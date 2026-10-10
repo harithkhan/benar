@@ -102,18 +102,19 @@ export function Select({ value, options, onChange, width, invalid, mono, accent,
 /**
  * A label above one field, with an optional hint. The label names its field
  * with an id: with no `for`, a label is for its first control, and that can
- * be a button.
+ * be a button. The children are beside the label, not inside it: a label can
+ * hold no other control than its field, and the children can have a button.
  */
 export function Labelled({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
   const id = useId();
   return (
-    <label htmlFor={id} className={cx('block min-w-0', className)}>
-      <span className="mb-1.5 flex items-baseline gap-2 text-sm text-ink-muted">
+    <div className={cx('min-w-0', className)}>
+      <label htmlFor={id} className="mb-1.5 flex items-baseline gap-2 text-sm text-ink-muted">
         {label}
         {hint && <span className="text-xs text-ink-faint">· {hint}</span>}
-      </span>
+      </label>
       <LabelFor value={id}>{children}</LabelFor>
-    </label>
+    </div>
   );
 }
 

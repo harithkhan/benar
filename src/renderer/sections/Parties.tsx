@@ -34,7 +34,7 @@ export function Parties({ form, problems, dispatch }: SectionProps) {
                 Remove
               </Button>
             </div>
-            <RowProblems list={list} only={['party-label-empty', 'party-label-bracket', 'party-label-duplicate', 'party-label-slug-shared', 'party-label-slug-empty', 'party-type']} />
+            <RowProblems list={list} only={['party-label-empty', 'party-label-bracket', 'party-label-duplicate', 'party-entity-shared', 'party-label-slug-empty', 'party-type']} />
 
             <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
               <div>

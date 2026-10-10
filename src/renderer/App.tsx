@@ -16,17 +16,18 @@ import { Parties } from './sections/Parties';
 import { Redact } from './sections/Redact';
 import { TextList } from './sections/TextList';
 import { TopBar } from './sections/TopBar';
-import { initialState, isDirty, reducer } from './state';
+import { initialState, isDirty, reducer, shownTargetState, type AppAction, type FoundTarget } from './state';
 
 /**
- * What the disk has for the save target, or `null` while the app does not know
- * it. The app asks again when the window gets the focus.
+ * What the form shows as the state of the disk for the save target, or `null`
+ * while the app does not know it. The app asks again when the window gets the
+ * focus. A result for a target that the form has no more is discarded.
  */
-function useTargetState(folder: string, stem: string): TargetState | null {
-  const [found, setFound] = useState<{ folder: string; stem: string; state: TargetState } | null>(null);
+function useTargetState(folder: string, stem: string, targetNo: number): TargetState | null {
+  const [last, setLast] = useState<FoundTarget | null>(null);
   useEffect(() => {
     let current = true;
-    const ask = () => void window.benar.targetState(folder, stem).then((state) => current && setFound({ folder, stem, state }));
+    const ask = () => void window.benar.targetState(folder, stem).then((state) => current && setLast({ folder, stem, targetNo, state }));
     const timer = setTimeout(ask, 120);
     window.addEventListener('focus', ask);
     return () => {
@@ -34,12 +35,11 @@ function useTargetState(folder: string, stem: string): TargetState | null {
       clearTimeout(timer);
       window.removeEventListener('focus', ask);
     };
-  }, [folder, stem]);
-  // The result of another folder or name says nothing about this target.
-  return found !== null && found.folder === folder && found.stem === stem ? found.state : null;
+  }, [folder, stem, targetNo]);
+  return shownTargetState({ folder, stem, targetNo }, last);
 }
 
-function byRow(problems: readonly Problem[]): ProblemMap {
+export function byRow(problems: readonly Problem[]): ProblemMap {
   const map = new Map<string, Problem[]>();
   for (const problem of problems) {
     const key = problem.rowId ?? FILE_KEY;
@@ -68,7 +68,7 @@ export function App() {
   const page = useRef<HTMLElement>(null);
   const { form, folder, name } = state;
   const stem = cleanStem(name);
-  const found = useTargetState(folder, stem);
+  const found = useTargetState(folder, stem, state.targetNo);
   // While the app does not know the state of the target, it shows no problem of the disk.
   const problems = useMemo(() => validate(form, { folder, stem, folderExists: found?.folderExists ?? true, wordFileExists: found?.wordFileExists ?? true }), [form, folder, stem, found]);
   const problemMap = useMemo(() => byRow(problems), [problems]);
@@ -80,10 +80,28 @@ export function App() {
 
   const toTop = () => page.current?.scrollTo({ top: 0 });
 
-  /** New, Open and the next file ask first when the form has unsaved changes. */
-  const guarded = (action: () => void) => () => {
-    if (dirty) setAsk({ kind: 'discard', then: action });
-    else action();
+  /**
+   * New, Open and the next file do nothing while a save is in progress: the
+   * result of the save is for the form that the window has now. They ask first
+   * when the form has unsaved changes.
+   */
+  const guarded = (action: () => void) => {
+    const run = () => {
+      if (!saveStarted.current) action();
+    };
+    return () => {
+      if (saveStarted.current) return;
+      if (dirty) setAsk({ kind: 'discard', then: run });
+      else run();
+    };
+  };
+
+  /** Gives the window another form. Not while a save is in progress, also when the save started after the command. */
+  const replaceForm = (action: Extract<AppAction, { type: 'new' | 'opened' | 'fromMatter' | 'nextFile' }>) => {
+    if (saveStarted.current) return;
+    dispatch(action);
+    setSavedStem(null);
+    toTop();
   };
 
   /** The Mac file dialog, then the checks of a loaded file. */
@@ -99,51 +117,40 @@ export function App() {
       setAsk({ kind: 'notice', title: 'The file did not open', text: result.message });
       return null;
     }
-    return { folder: picked.folder, stem: picked.stem, sameFile: picked.sameFile, form: result.state };
+    return { folder: picked.folder, stem: picked.stem, file: picked.file, sameFile: picked.sameFile, form: result.state };
   };
 
-  const newFile = guarded(() => {
-    dispatch({ type: 'new' });
-    setSavedStem(null);
-    toTop();
-  });
+  const newFile = guarded(() => replaceForm({ type: 'new' }));
 
   const openFile = guarded(async () => {
     const picked = await pickTruth();
-    if (!picked) return;
-    dispatch({ type: 'opened', form: picked.form, folder: picked.folder, stem: picked.stem, sameFile: picked.sameFile });
-    setSavedStem(null);
-    toTop();
+    if (picked) replaceForm({ type: 'opened', ...picked });
   });
 
   const newFromMatter = guarded(async () => {
     const picked = await pickTruth();
-    if (!picked) return;
-    dispatch({ type: 'fromMatter', source: picked.form, folder: picked.folder });
-    setSavedStem(null);
-    toTop();
+    if (picked) replaceForm({ type: 'fromMatter', source: picked.form, folder: picked.folder });
   });
 
-  const nextFile = guarded(() => {
-    dispatch({ type: 'nextFile' });
-    setSavedStem(null);
-    toTop();
-  });
+  const nextFile = guarded(() => replaceForm({ type: 'nextFile' }));
 
-  /** Save is not available while a save is in progress, or while the app does not know the state of the target. */
-  const canSave = found !== null && !saving;
-
+  /**
+   * Save does not wait for the state of the target: the main process checks
+   * the folder, the name and an existing file again at the save itself. Save
+   * is not available while a save is in progress.
+   */
   const save = async (replace = false) => {
-    if (hasError || !canSave || saveStarted.current) return;
+    if (hasError || saveStarted.current) return;
     saveStarted.current = true;
     setSaving(true);
     try {
       const target = { folder: folder.trim(), stem };
+      const { formNo } = state;
       // Save replaces the file that the form opened, and asks for each other file.
       const isOpened = state.opened !== null && targetPath(state.opened.folder, state.opened.stem) === targetPath(target.folder, target.stem);
       const result = await window.benar.saveTruth(target.folder, target.stem, json, replace || isOpened);
       if (result.ok) {
-        dispatch({ type: 'saved', ...target, json });
+        dispatch({ type: 'saved', ...target, json, formNo });
         setSavedStem(target.stem);
       } else if (result.reason === 'exists') {
         setAsk({ kind: 'replace' });
@@ -173,7 +180,7 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar fileName={state.opened?.stem ?? null} dirty={dirty} onNew={newFile} onOpen={openFile} onNewFromMatter={newFromMatter} />
+      <TopBar fileName={state.fileName} dirty={dirty} onNew={saving ? undefined : newFile} onOpen={saving ? undefined : openFile} onNewFromMatter={saving ? undefined : newFromMatter} />
       <main ref={page} className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto flex max-w-[1060px] flex-col gap-4 px-5 py-5">
           <FileSection form={form} folder={folder} name={name} stem={stem} problems={problemMap} dispatch={dispatch} />
@@ -191,13 +198,13 @@ export function App() {
           <JsonPanel json={json} />
         </div>
       </main>
-      <Footer problems={problems} onSave={canSave ? () => void save() : undefined} />
+      <Footer problems={problems} onSave={saving ? undefined : () => void save()} />
 
       {savedStem !== null && (
         <Toast
           onClose={() => setSavedStem(null)}
           actions={
-            <Button compact onClick={nextFile}>
+            <Button compact onClick={nextFile} disabled={saving}>
               Start the next file of this matter
             </Button>
           }
