@@ -1,6 +1,7 @@
 import { newId, writeLabel, type Other } from '../../shared/model';
 import { ID_TYPES, NAME_TYPES } from '../../shared/schema';
 import { Button, Card, focusRow, hasCode, Input, RemoveButton, RowProblems, Select, type Option } from '../components/ui';
+import { isBlankLabel } from '../state';
 import { describedBy, TYPE_OPTIONS, type SectionProps } from './shared';
 
 const NO_OWNER = '';
@@ -52,7 +53,7 @@ export function Others({ form, problems, dispatch }: SectionProps) {
                     accent
                     value={other.label ?? ''}
                     onChange={(label) => patch({ label })}
-                    onBlur={() => other.label === '' && patch({ label: null })}
+                    onBlur={() => isBlankLabel(other.label) && patch({ label: null })}
                     invalid={hasCode(list, 'other-label-empty', 'other-label-bracket', 'other-label-is-party', 'other-label-shared')}
                     aria-label={`Role label of entry ${place + 1}`}
                     placeholder="ROLE LABEL"
@@ -69,6 +70,7 @@ export function Others({ form, problems, dispatch }: SectionProps) {
                         options={[{ value: NO_OWNER, label: 'No owner' }, ...(other.unknownOf !== undefined && !owner ? [{ value: UNKNOWN_OWNER, label: 'Not in the list' }] : []), ...owners]}
                         onChange={(value) => value !== UNKNOWN_OWNER && patch({ ownerId: value === NO_OWNER ? null : value })}
                         invalid={hasCode(list, 'of-self', 'of-missing', 'of-owner-type', 'of-owner-has-of')}
+                        aria-label={`Belongs to, entry ${place + 1}`}
                         data-field="owner"
                         aria-describedby={describedBy(list, 'owner', problemsId)}
                         width="w-48"

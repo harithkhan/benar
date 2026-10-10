@@ -412,6 +412,78 @@ describe('the spoken names of the buttons', () => {
   });
 });
 
+describe('the spoken names of the controls of the rows', () => {
+  const LISTS = ['Addresses', 'Emails', 'Phones', 'Other people and identifiers', 'Redact', 'Keep', 'Own titles'];
+  const CONTROLS = new Set([...FIELDS, 'button']);
+
+  /** A form with two rows or more in each row list. Two entries of others have the Belongs to select. */
+  function twoRowsForm(): FormState {
+    const file = example();
+    file.intake.addresses.push({ text: 'Lot 5, Jalan Kenanga, 43000 Kajang, Selangor', party: '[PARTY B]' });
+    file.intake.emails = [
+      { text: 'tan@example.test', party: '[PARTY A]' },
+      { text: 'bayu@example.test', party: null },
+    ];
+    file.intake.phones.push({ text: '03-8736 1234', party: '[PARTY B]' });
+    file.intake.others = [
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'nric', text: '900101-01-1234', of: 0 },
+      { type: 'passport', text: 'A1234567' },
+    ];
+    file.keep.push('Ng Ah Seng v Syarikat Maju Sdn Bhd [2018] 1 MLJ 55');
+    file.ownTitles.push('Bayu Lestari Sdn Bhd v Tan Ah Kow');
+    return load(file);
+  }
+
+  const elements = inside(page(twoRowsForm()));
+  const labels = elements.filter((element) => element.tag === 'label');
+  /** The card with this title. The count after the title does not count. */
+  const cardOf = (title: string): Element => {
+    const cards = elements.filter((element) => element.tag === 'section' && element.children[0]?.tag === 'header' && inside(element).some((heading) => heading.tag === 'h2' && heading.text.replace(/\d+$/, '') === title));
+    expect(cards).toHaveLength(1);
+    return cards[0]!;
+  };
+  /** The text of the label itself, without the text of the elements that it holds. */
+  const ownText = (label: Element): string => label.children.reduce((text, child) => text.replace(child.text, ''), label.text).trim();
+  /** The label of a control: the label that holds it, or the label whose `for` names it. */
+  const labelOf = (control: Element): Element | undefined => labels.find((label) => (label.attrs.for === undefined ? inside(label).includes(control) : label.attrs.for === control.attrs.id));
+  /** What a screen reader says for a control: its `aria-label`, else the text of its label, else its own text. */
+  const spokenName = (control: Element): string => {
+    if (control.attrs['aria-label'] !== undefined) return control.attrs['aria-label'];
+    const label = labelOf(control);
+    return label ? ownText(label) : control.text;
+  };
+
+  test.each(LISTS)('%s: no control of one row has the spoken name of a control of another row', (title) => {
+    const rows = inside(cardOf(title)).filter((element) => element.attrs.id?.startsWith('row-'));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    const names = rows.map((row) => inside(row).filter((element) => CONTROLS.has(element.tag)).map(spokenName));
+    names.forEach((ofRow, place) => {
+      expect(ofRow.length).toBeGreaterThan(0);
+      const ofOtherRows = names.filter((_, n) => n !== place).flat();
+      for (const name of ofRow) expect(ofOtherRows).not.toContain(name);
+    });
+  });
+
+  test('each aria-label on a control in a label starts with the text of the label, and says the row', () => {
+    const named = labels.flatMap((label) => inside(label).flatMap((control) => (CONTROLS.has(control.tag) && control.attrs['aria-label'] !== undefined ? [[ownText(label), control.attrs['aria-label']] as const] : [])));
+    for (const [text, name] of named) {
+      expect(text).not.toBe('');
+      expect(name.startsWith(text)).toBe(true);
+    }
+    expect(named.map(([, name]) => name)).toEqual([
+      'Linked to, address 1',
+      'Linked to, address 2',
+      'Linked to, email 1',
+      'Linked to, email 2',
+      'Linked to, phone 1',
+      'Linked to, phone 2',
+      'Belongs to, entry 2',
+      'Belongs to, entry 3',
+    ]);
+  });
+});
+
 describe('the chips of a chip input', () => {
   const classes = (element: Element): string[] => (element.attrs.class ?? '').split(' ');
 

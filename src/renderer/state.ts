@@ -35,6 +35,13 @@ export function pasteLines(text: string): string[] {
     .filter((line) => line !== '');
 }
 
+/**
+ * `true` for a role label with no text in it: nothing, or spaces only. Such a
+ * label is no label when the user leaves the field. The reducer does not trim
+ * while the user types.
+ */
+export const isBlankLabel = (label: string | null): boolean => label !== null && label.trim() === '';
+
 const patchRow = <Row extends { id: string }>(rows: Row[], id: string, change: (row: Row) => Row): Row[] => rows.map((row) => (row.id === id ? change(row) : row));
 
 export function formReducer(form: FormState, action: FormAction): FormState {

@@ -6,7 +6,7 @@ import { parse } from '../src/shared/parse';
 import { serialise } from '../src/shared/serialise';
 import { cleanStem } from '../src/shared/target';
 import { validate } from '../src/shared/validate';
-import { entityIds, initialState, isDirty, isOwnFile, pasteLines, reducer, shownTargetState, type AppAction, type AppState, type FoundTarget, type Target } from '../src/renderer/state';
+import { entityIds, initialState, isBlankLabel, isDirty, isOwnFile, pasteLines, reducer, shownTargetState, type AppAction, type AppState, type FoundTarget, type Target } from '../src/renderer/state';
 import { EXAMPLE, example, text } from './example';
 
 function load(value: unknown = EXAMPLE): FormState {
@@ -97,6 +97,27 @@ describe('the reducer', () => {
     const state = run(initialState(), { type: 'addOther', id: 'o' }, { type: 'other', id: 'o', patch: { label: 'SECRETARY 1' } });
     expect(file(state).intake.others[0].label).toBe('[SECRETARY 1]');
     expect('label' in file(run(state, { type: 'other', id: 'o', patch: { label: '' } })).intake.others[0]).toBe(false);
+  });
+
+  test('a role label of spaces only is blank when the user leaves the field, and is not trimmed while the user types', () => {
+    expect(isBlankLabel(null)).toBe(false);
+    expect(isBlankLabel('')).toBe(true);
+    expect(isBlankLabel('   ')).toBe(true);
+    expect(isBlankLabel(' \t ')).toBe(true);
+    expect(isBlankLabel(' SECRETARY 1 ')).toBe(false);
+    // A loaded `[]` is not blank: the user clears the field to remove it.
+    expect(isBlankLabel('[]')).toBe(false);
+
+    const target = { folder: '/scratch/matter-1', stem: 'statement', folderExists: true, wordFileExists: true };
+    const codes = (state: AppState) => validate(state.form, target).map((problem) => problem.code);
+    const typed = run(initialState(), { type: 'addOther', id: 'o' }, { type: 'other', id: 'o', patch: { label: ' ' } });
+    expect(typed.form.others[0]!.label).toBe(' ');
+    expect(codes(typed)).toContain('other-label-empty');
+    // The field, left: the label goes, and the error with it.
+    expect(isBlankLabel(typed.form.others[0]!.label)).toBe(true);
+    const left = run(typed, { type: 'other', id: 'o', patch: { label: null } });
+    expect(left.form.others[0]!.label).toBeNull();
+    expect(codes(left)).not.toContain('other-label-empty');
   });
 
   test('+ form adds a row below with the same entity, expect and type', () => {

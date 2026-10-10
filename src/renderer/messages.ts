@@ -16,7 +16,7 @@ export const MESSAGE: Record<Code, string> = {
   'of-missing': 'The file gives an owner that is not in the list. Select an owner or No owner.',
   'of-owner-type': 'The owner must be a party, a person, a child or a company.',
   'of-owner-has-of': 'The owner cannot belong to another entry.',
-  'other-label-empty': 'The role label of the file is empty. Type a label, or click the field and leave it to remove the label.',
+  'other-label-empty': 'The role label is empty. Type a label, or clear the field and leave it to remove the label.',
   'other-label-bracket': 'A label cannot have a square bracket inside it.',
   'other-label-is-party': 'This label is the label of a party.',
   'other-label-shared': 'Entries that share a label must have the same type, and none of them can have an owner.',

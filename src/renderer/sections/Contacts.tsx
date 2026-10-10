@@ -56,6 +56,7 @@ export function Contacts({ list, form, problems, dispatch }: SectionProps & { li
                       options={unknown ? [{ value: `?${row.unknownParty}`, label: `${row.unknownParty} · not in Parties` }, ...partyOptions] : partyOptions}
                       onChange={(value) => dispatch({ type: 'contact', list, id: row.id, patch: { partyId: value === NO_PARTY ? null : value } })}
                       invalid={hasCode(rowProblems, 'contact-unknown-party')}
+                      aria-label={`Linked to, ${label}`}
                       data-field="party"
                       aria-describedby={describedBy(rowProblems, 'party', problemsId)}
                       width="w-36"

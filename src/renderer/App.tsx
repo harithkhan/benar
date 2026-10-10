@@ -181,7 +181,21 @@ export function App() {
   useEffect(() => {
     const names: MenuCommand[] = ['new', 'open', 'new-from-matter', 'save'];
     const run = (command: MenuCommand) => {
-      if (!asking.current) commands.current?.[command]();
+      if (asking.current) return;
+      // A click on a button takes the focus from the field first, and a text
+      // that the user typed in a chip input and did not enter becomes a chip
+      // on that blur. A menu command takes no focus. So the listener takes it,
+      // and runs the command in a new task: React applies the change of the
+      // blur before the task runs, so `commands.current` has the handlers of
+      // the form with the chip. Then the field gets the focus back, so that
+      // the user can type on. A field that a new form removed gets no focus.
+      const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      focused?.blur();
+      setTimeout(() => {
+        if (asking.current) return;
+        commands.current?.[command]();
+        if (focused?.isConnected) focused.focus();
+      }, 0);
     };
     const listeners = names.map((command) => [menuEventName(command), () => run(command)] as const);
     for (const [event, listener] of listeners) window.addEventListener(event, listener);
