@@ -105,7 +105,7 @@ describe('the reducer', () => {
     expect(isBlankLabel('   ')).toBe(true);
     expect(isBlankLabel(' \t ')).toBe(true);
     expect(isBlankLabel(' SECRETARY 1 ')).toBe(false);
-    // A loaded `[]` is not blank: the user clears the field to remove it.
+    // A typed `[]` is not blank: the user clears the field to remove it. (A loaded `[]` has the label `''` in the state.)
     expect(isBlankLabel('[]')).toBe(false);
 
     const target = { folder: '/scratch/matter-1', stem: 'statement', folderExists: true, wordFileExists: true };

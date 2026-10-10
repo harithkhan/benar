@@ -194,7 +194,8 @@ export function App() {
       setTimeout(() => {
         if (asking.current) return;
         commands.current?.[command]();
-        if (focused?.isConnected) focused.focus();
+        // The field was in view before the blur. A scroll here would undo the scroll to the top of a new form.
+        if (focused?.isConnected) focused.focus({ preventScroll: true });
       }, 0);
     };
     const listeners = names.map((command) => [menuEventName(command), () => run(command)] as const);
