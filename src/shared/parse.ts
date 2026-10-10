@@ -48,7 +48,7 @@ function party(value: unknown): Party {
     label: labelInner(text(raw['label'])),
     type: text(raw['type']),
     fullName: text(raw['fullName']),
-    aliases: texts(raw['aliases']),
+    aliases: raw['aliases'] === null ? [] : texts(raw['aliases']),
     idNumber: text(raw['idNumber']),
     definedTerm: text(raw['definedTerm']),
     ...(raw['idLabel'] === undefined ? {} : { idLabel: raw['idLabel'] }),
@@ -108,10 +108,12 @@ function redactRow(value: unknown): RedactRow {
 
 export function parse(input: string): ParseResult {
   try {
-    const file = object(JSON.parse(input));
+    // A file can start with one byte order mark.
+    const file = object(JSON.parse(input.startsWith('\uFEFF') ? input.slice(1) : input));
     if (file['schema'] !== SCHEMA) throw new NotManual();
     const intake = object(file['intake']);
-    const batch = file['batch'];
+    // A missing or `null` batch: the file is not part of a batch.
+    const batch = file['batch'] ?? undefined;
     if (batch !== undefined && typeof batch !== 'string') throw new NotManual();
     const parties = list(intake['parties']).map(party);
     const state: FormState = {

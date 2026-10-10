@@ -1,7 +1,7 @@
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { SaveResult, TargetState } from '../shared/bridge';
+import type { PickedTruth, SaveResult, TargetState } from '../shared/bridge';
 import { isStemValid, splitPath, targetPath, wordPath } from '../shared/target';
 
 // The file access of the app. It has no import of Electron, so that a test
@@ -49,6 +49,11 @@ export async function saveTruth(folder: string, stem: string, json: string, repl
   const temporary = `${target}.tmp`;
   try {
     await writeFile(temporary, json, 'utf8');
+    // A file can appear after the first check. So the app checks again directly before the rename.
+    if (!replace && (await isFile(target))) {
+      await rm(temporary, { force: true });
+      return { ok: false, reason: 'exists' };
+    }
     await rename(temporary, target);
     return { ok: true };
   } catch {
@@ -66,4 +71,11 @@ export async function readTruth(file: string): Promise<OpenedTruth | null> {
   } catch {
     return null;
   }
+}
+
+/** What `openTruth` gives for the file that the user picked. The stem alone does not say which file it was. */
+export async function pickedTruth(file: string): Promise<PickedTruth> {
+  const { folder, stem } = splitPath(file);
+  const json = (await readTruth(file))?.json ?? null;
+  return { folder, stem, sameFile: file === targetPath(folder, stem), json };
 }

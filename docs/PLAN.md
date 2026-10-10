@@ -142,6 +142,7 @@ A label is compared in this form: trim, remove one `[` at the start and one `]` 
 - A `redact` text is the `definedTerm` of a party.
 - No `<name>.docx` is in the target folder. `eval` does not score such a file.
 - A party has no `fullName`.
+- Two labels that are not the same label give the same slug (section 5), or a label gives an empty slug. `Add rows from intake` makes the entity ids from the slugs.
 
 ### 4.5 A loaded file
 
@@ -180,7 +181,7 @@ The preload gives the renderer these functions only:
 | --- | --- |
 | `pickFolder()` | The Mac folder dialog. Returns the path or `null` |
 | `pickWordFile()` | The Mac file dialog, filter `.docx`. Returns `{ folder, stem }` from the path. It does not open the file |
-| `openTruth()` | The Mac file dialog, filter `.json`. Returns `{ folder, stem, json }` |
+| `openTruth()` | The Mac file dialog, filter `.json`. Returns `{ folder, stem, sameFile, json }`. `sameFile` is true only when the picked file is the file that a Save of this folder and stem writes |
 | `targetState(folder, stem)` | Returns `{ folderExists, truthExists, wordFileExists }` |
 | `saveTruth(folder, stem, json, replace)` | Writes `<stem>.truth.json.tmp` in the folder, then renames it. Refuses when the file exists and `replace` is false |
 | `setDirty(dirty)` | The main process asks before the window closes with unsaved changes |

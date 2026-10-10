@@ -1,4 +1,4 @@
-import { labelInner, labelKey, textKey, type ContactList, type FormState, type Other } from './model';
+import { labelInner, labelKey, slug, textKey, type ContactList, type FormState, type Other } from './model';
 import { EXPECT_VALUES, ID_TYPES, NAME_TYPES, PARTY_TYPE_VALUES, TYPE_VALUES } from './schema';
 import { isStemValid } from './target';
 
@@ -32,7 +32,16 @@ export type ErrorCode =
   | 'target-name-bad'
   | 'target-folder-missing';
 
-export type WarningCode = 'batch-empty' | 'redact-duplicate' | 'redact-defined-term' | 'no-word-file' | 'party-no-name';
+export type WarningCode =
+  | 'batch-empty'
+  | 'redact-duplicate'
+  | 'redact-defined-term'
+  | 'no-word-file'
+  | 'party-no-name'
+  | 'party-label-slug-shared'
+  | 'party-label-slug-empty'
+  | 'other-label-slug-shared'
+  | 'other-label-slug-empty';
 
 export type Code = ErrorCode | WarningCode;
 
@@ -72,6 +81,17 @@ export function validate(state: FormState, target: TargetInfo): Problem[] {
   if (target.folderExists && stemValid && !target.wordFileExists) warning('file', null, 'no-word-file');
   if (state.batchOn && state.batch.trim() === '') warning('file', null, 'batch-empty');
 
+  // The slug of a label is the entity id of `Add rows from intake`. Two labels
+  // that are not the same label must not give the same slug.
+  const slugKeys = new Map<string, Set<string>>();
+  for (const label of [...state.parties.map((party) => party.label), ...state.others.map((other) => other.label)]) {
+    if (label === null) continue;
+    const keys = slugKeys.get(slug(label)) ?? new Set<string>();
+    slugKeys.set(slug(label), keys.add(labelKey(label)));
+  }
+  const slugShared = (label: string): boolean => slug(label) !== '' && (slugKeys.get(slug(label))?.size ?? 0) > 1;
+  const slugEmpty = (label: string): boolean => labelKey(label) !== '' && !hasBracket(label) && slug(label) === '';
+
   // Parties.
   const partyKeys = new Map<string, number>();
   for (const party of state.parties) {
@@ -83,6 +103,8 @@ export function validate(state: FormState, target: TargetInfo): Problem[] {
     if (key === '') error('parties', party.id, 'party-label-empty');
     else if (hasBracket(party.label)) error('parties', party.id, 'party-label-bracket');
     else if ((partyKeys.get(key) ?? 0) > 1) error('parties', party.id, 'party-label-duplicate');
+    if (slugShared(party.label)) warning('parties', party.id, 'party-label-slug-shared');
+    if (slugEmpty(party.label)) warning('parties', party.id, 'party-label-slug-empty');
     if (!PARTY_TYPE_VALUES.has(party.type)) error('parties', party.id, 'party-type');
     if (party.fullName.trim() === '') warning('parties', party.id, 'party-no-name');
   }
@@ -128,6 +150,8 @@ export function validate(state: FormState, target: TargetInfo): Problem[] {
         );
         if (clash) error('others', other.id, 'other-label-shared');
       }
+      if (slugShared(other.label)) warning('others', other.id, 'other-label-slug-shared');
+      if (slugEmpty(other.label)) warning('others', other.id, 'other-label-slug-empty');
     }
   }
 

@@ -18,14 +18,15 @@ import { TextList } from './sections/TextList';
 import { TopBar } from './sections/TopBar';
 import { initialState, isDirty, reducer } from './state';
 
-const NO_TARGET: TargetState = { folderExists: false, truthExists: false, wordFileExists: false };
-
-/** What the disk has for the save target. The app asks again when the window gets the focus. */
-function useTargetState(folder: string, stem: string): TargetState {
-  const [found, setFound] = useState(NO_TARGET);
+/**
+ * What the disk has for the save target, or `null` while the app does not know
+ * it. The app asks again when the window gets the focus.
+ */
+function useTargetState(folder: string, stem: string): TargetState | null {
+  const [found, setFound] = useState<{ folder: string; stem: string; state: TargetState } | null>(null);
   useEffect(() => {
     let current = true;
-    const ask = () => void window.benar.targetState(folder, stem).then((state) => current && setFound(state));
+    const ask = () => void window.benar.targetState(folder, stem).then((state) => current && setFound({ folder, stem, state }));
     const timer = setTimeout(ask, 120);
     window.addEventListener('focus', ask);
     return () => {
@@ -34,7 +35,8 @@ function useTargetState(folder: string, stem: string): TargetState {
       window.removeEventListener('focus', ask);
     };
   }, [folder, stem]);
-  return found;
+  // The result of another folder or name says nothing about this target.
+  return found !== null && found.folder === folder && found.stem === stem ? found.state : null;
 }
 
 function byRow(problems: readonly Problem[]): ProblemMap {
@@ -60,11 +62,15 @@ export function App() {
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [ask, setAsk] = useState<Ask | null>(null);
   const [savedStem, setSavedStem] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  /** The same as `saving`, for a second command that comes before the next render. */
+  const saveStarted = useRef(false);
   const page = useRef<HTMLElement>(null);
   const { form, folder, name } = state;
   const stem = cleanStem(name);
   const found = useTargetState(folder, stem);
-  const problems = useMemo(() => validate(form, { folder, stem, folderExists: found.folderExists, wordFileExists: found.wordFileExists }), [form, folder, stem, found]);
+  // While the app does not know the state of the target, it shows no problem of the disk.
+  const problems = useMemo(() => validate(form, { folder, stem, folderExists: found?.folderExists ?? true, wordFileExists: found?.wordFileExists ?? true }), [form, folder, stem, found]);
   const problemMap = useMemo(() => byRow(problems), [problems]);
   const json = useMemo(() => serialise(form), [form]);
   const dirty = isDirty(state);
@@ -74,7 +80,7 @@ export function App() {
 
   const toTop = () => page.current?.scrollTo({ top: 0 });
 
-  /** New and Open ask first when the form has unsaved changes. */
+  /** New, Open and the next file ask first when the form has unsaved changes. */
   const guarded = (action: () => void) => () => {
     if (dirty) setAsk({ kind: 'discard', then: action });
     else action();
@@ -93,7 +99,7 @@ export function App() {
       setAsk({ kind: 'notice', title: 'The file did not open', text: result.message });
       return null;
     }
-    return { folder: picked.folder, stem: picked.stem, form: result.state };
+    return { folder: picked.folder, stem: picked.stem, sameFile: picked.sameFile, form: result.state };
   };
 
   const newFile = guarded(() => {
@@ -105,7 +111,7 @@ export function App() {
   const openFile = guarded(async () => {
     const picked = await pickTruth();
     if (!picked) return;
-    dispatch({ type: 'opened', form: picked.form, folder: picked.folder, stem: picked.stem });
+    dispatch({ type: 'opened', form: picked.form, folder: picked.folder, stem: picked.stem, sameFile: picked.sameFile });
     setSavedStem(null);
     toTop();
   });
@@ -118,25 +124,35 @@ export function App() {
     toTop();
   });
 
-  const nextFile = () => {
+  const nextFile = guarded(() => {
     dispatch({ type: 'nextFile' });
     setSavedStem(null);
     toTop();
-  };
+  });
+
+  /** Save is not available while a save is in progress, or while the app does not know the state of the target. */
+  const canSave = found !== null && !saving;
 
   const save = async (replace = false) => {
-    if (hasError) return;
-    const target = { folder: folder.trim(), stem };
-    // Save replaces the file that the form opened, and asks for each other file.
-    const isOpened = state.opened !== null && targetPath(state.opened.folder, state.opened.stem) === targetPath(target.folder, target.stem);
-    const result = await window.benar.saveTruth(target.folder, target.stem, json, replace || isOpened);
-    if (result.ok) {
-      dispatch({ type: 'saved', ...target, json });
-      setSavedStem(target.stem);
-    } else if (result.reason === 'exists') {
-      setAsk({ kind: 'replace' });
-    } else {
-      setAsk({ kind: 'notice', title: 'The file was not saved', text: SAVE_FAILED[result.reason] });
+    if (hasError || !canSave || saveStarted.current) return;
+    saveStarted.current = true;
+    setSaving(true);
+    try {
+      const target = { folder: folder.trim(), stem };
+      // Save replaces the file that the form opened, and asks for each other file.
+      const isOpened = state.opened !== null && targetPath(state.opened.folder, state.opened.stem) === targetPath(target.folder, target.stem);
+      const result = await window.benar.saveTruth(target.folder, target.stem, json, replace || isOpened);
+      if (result.ok) {
+        dispatch({ type: 'saved', ...target, json });
+        setSavedStem(target.stem);
+      } else if (result.reason === 'exists') {
+        setAsk({ kind: 'replace' });
+      } else {
+        setAsk({ kind: 'notice', title: 'The file was not saved', text: SAVE_FAILED[result.reason] });
+      }
+    } finally {
+      saveStarted.current = false;
+      setSaving(false);
     }
   };
 
@@ -175,7 +191,7 @@ export function App() {
           <JsonPanel json={json} />
         </div>
       </main>
-      <Footer problems={problems} onSave={() => void save()} />
+      <Footer problems={problems} onSave={canSave ? () => void save() : undefined} />
 
       {savedStem !== null && (
         <Toast

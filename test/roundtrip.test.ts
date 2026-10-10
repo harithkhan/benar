@@ -191,6 +191,13 @@ describe('a loaded file', () => {
     ['a redact row that is not an object', () => { const f = example(); f.redact = ['Tan Ah Kow']; return text(f); }],
     ['a keep that is not a list', () => { const f = example(); f.keep = 'x'; return text(f); }],
     ['a batch that is not text', () => { const f = example(); f.batch = 3; return text(f); }],
+    ['an entry of others that is not an object', () => { const f = example(); f.intake.others = ['Siti binti Hassan']; return text(f); }],
+    ...(['addresses', 'emails', 'phones'] as const).map((list): [string, () => string] => [
+      `an entry of intake.${list} that is not an object`,
+      () => { const f = example(); f.intake[list] = ['x']; return text(f); },
+    ]),
+    ['a redact row with a text that is not text', () => { const f = example(); f.redact[0].text = 5; return text(f); }],
+    ['two byte order marks at the start', () => `\uFEFF\uFEFF${text(EXAMPLE)}`],
   ];
 
   test.each(refused)('refuses %s', (_name, make) => {
@@ -207,6 +214,59 @@ describe('a loaded file', () => {
     const state = load(file);
     expect(state[key]).toEqual([]);
     expect(JSON.parse(serialise(state))[key]).toEqual([]);
+  });
+
+  test('a file that starts with a byte order mark loads', () => {
+    const state = load(`\uFEFF${text(EXAMPLE)}`);
+    expect(serialise(state)).toBe(text(EXAMPLE));
+  });
+
+  test('a batch that is null loads as not part of a batch', () => {
+    const file = example();
+    file.batch = null;
+    const state = load(file);
+    expect(state.batchOn).toBe(false);
+    expect(state.batch).toBe('');
+    expect('batch' in JSON.parse(serialise(state))).toBe(false);
+  });
+
+  test('aliases that are null load as an empty list', () => {
+    const file = example();
+    file.intake.parties[0].aliases = null;
+    const state = load(file);
+    expect(state.parties[0]!.aliases).toEqual([]);
+    expect(JSON.parse(serialise(state)).intake.parties[0].aliases).toEqual([]);
+  });
+
+  test('missing aliases load as an empty list', () => {
+    const file = example();
+    delete file.intake.parties[0].aliases;
+    const state = load(file);
+    expect(state.parties[0]!.aliases).toEqual([]);
+    expect(JSON.parse(serialise(state)).intake.parties[0].aliases).toEqual([]);
+  });
+
+  test('a label and an of that are null on an entry of others load as no label and no owner', () => {
+    const file = example();
+    file.intake.others = [
+      { type: 'person', text: 'Siti binti Hassan', label: null, of: null },
+      { type: 'nric', text: '900101-01-1234', label: null, of: null },
+    ];
+    const state = load(file);
+    expect(state.others.map((other) => [other.label, other.ownerId, other.unknownOf])).toEqual([
+      [null, null, undefined],
+      [null, null, undefined],
+    ]);
+    expect(JSON.parse(serialise(state)).intake.others).toEqual([
+      { type: 'person', text: 'Siti binti Hassan' },
+      { type: 'nric', text: '900101-01-1234' },
+    ]);
+  });
+
+  test('a label that is null on an address stays as loaded', () => {
+    const file = example();
+    file.intake.addresses[0].label = null;
+    expect(serialise(load(file))).toBe(text(file));
   });
 
   test('the batch switch is on when the file has a batch', () => {

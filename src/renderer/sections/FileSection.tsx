@@ -33,7 +33,7 @@ export function FileSection({ form, folder, name, stem, problems, dispatch }: Pr
           <div>
             <Labelled label="Folder">
               <div className="flex gap-2">
-                <Input value={folder} onChange={(value) => dispatch({ type: 'folder', value })} mono invalid={hasCode(list, 'target-folder-empty', 'target-folder-missing')} placeholder="/path/to/the/folder" />
+                <Input value={folder} onChange={(value) => dispatch({ type: 'folder', value })} mono invalid={hasCode(list, 'target-folder-empty', 'target-folder-missing')} data-field="folder" placeholder="/path/to/the/folder" />
                 <Button onClick={browse}>Browse…</Button>
               </div>
             </Labelled>
@@ -41,7 +41,7 @@ export function FileSection({ form, folder, name, stem, problems, dispatch }: Pr
           </div>
           <div>
             <Labelled label="Name" hint="the same name as the Word file">
-              <Input value={name} onChange={(value) => dispatch({ type: 'name', value })} mono invalid={hasCode(list, 'target-name-empty', 'target-name-bad')} placeholder="name" />
+              <Input value={name} onChange={(value) => dispatch({ type: 'name', value })} mono invalid={hasCode(list, 'target-name-empty', 'target-name-bad')} data-field="name" placeholder="name" />
             </Labelled>
             <RowProblems list={list} only={['target-name-empty', 'target-name-bad', 'no-word-file']} />
           </div>
@@ -59,7 +59,7 @@ export function FileSection({ form, folder, name, stem, problems, dispatch }: Pr
           <Switch checked={form.batchOn} onChange={(on) => dispatch({ type: 'batchOn', on })} label="Part of a batch" />
           {form.batchOn && (
             <div className="min-w-56 flex-1">
-              <Input value={form.batch} onChange={(value) => dispatch({ type: 'batch', value })} accent aria-label="Batch" placeholder="matter-1" />
+              <Input value={form.batch} onChange={(value) => dispatch({ type: 'batch', value })} accent aria-label="Batch" data-field="batch" placeholder="matter-1" />
               <RowProblems list={list} only={['batch-empty']} />
             </div>
           )}

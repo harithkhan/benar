@@ -26,6 +26,14 @@ export type FormAction =
   | { type: 'text'; list: TextList; id: string; value: string }
   | { type: 'remove'; list: RowList; id: string };
 
+/** The lines of a pasted text. A line with no text is not a line. */
+export function pasteLines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
+}
+
 const patchRow = <Row extends { id: string }>(rows: Row[], id: string, change: (row: Row) => Row): Row[] => rows.map((row) => (row.id === id ? change(row) : row));
 
 export function formReducer(form: FormState, action: FormAction): FormState {
@@ -116,7 +124,7 @@ export interface AppState {
   folder: string;
   /** The text of the name field. `cleanStem` gives the stem. */
   name: string;
-  /** The file that the form opened or saved last. Save replaces it with no question. */
+  /** The file that the form opened or saved last. Save replaces it with no question. `null` when Save writes another file. */
   opened: { folder: string; stem: string } | null;
   /** The snapshot at the last new, open or save. The form is dirty when the snapshot is different. */
   baseline: string;
@@ -132,7 +140,7 @@ export type AppAction =
   | { type: 'target'; folder: string; name: string }
   | { type: 'filled'; redact: RedactRow[]; added: number; skipped: number }
   | { type: 'new' }
-  | { type: 'opened'; form: FormState; folder: string; stem: string }
+  | { type: 'opened'; form: FormState; folder: string; stem: string; sameFile: boolean }
   | { type: 'fromMatter'; source: FormState; folder: string }
   | { type: 'nextFile' }
   | { type: 'saved'; folder: string; stem: string; json: string };
@@ -185,7 +193,8 @@ export function reducer(state: AppState, action: AppAction): AppState {
     case 'new':
       return initialState();
     case 'opened':
-      return clean({ form: action.form, folder: action.folder, name: action.stem, opened: { folder: action.folder, stem: action.stem }, knownEntities: [] });
+      // The target is the opened file only when a save of this folder and stem writes that file.
+      return clean({ form: action.form, folder: action.folder, name: action.stem, opened: action.sameFile ? { folder: action.folder, stem: action.stem } : null, knownEntities: [] });
     case 'fromMatter':
       return clean({ form: sameMatter(action.source), folder: action.folder, name: '', opened: null, knownEntities: entityIds(action.source.redact) });
     case 'nextFile':

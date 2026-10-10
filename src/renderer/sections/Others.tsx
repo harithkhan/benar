@@ -44,7 +44,7 @@ export function Others({ form, problems, dispatch }: SectionProps) {
             return (
               <li key={other.id} id={`row-${other.id}`} className="scroll-mt-4 border-b border-line px-4 py-2.5 last:border-b-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Select compact value={other.type} options={TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'other-type', 'of-not-id-type')} aria-label={`Type of entry ${place + 1}`} className="w-52" />
+                  <Select compact value={other.type} options={TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'other-type', 'of-not-id-type')} aria-label={`Type of entry ${place + 1}`} data-field="type" width="w-52" />
                   <Input compact value={other.text} onChange={(text) => patch({ text })} aria-label={`Text of entry ${place + 1}`} placeholder="Text, as it stands in the document" className="min-w-48 flex-1" />
                   <Input
                     compact
@@ -55,7 +55,8 @@ export function Others({ form, problems, dispatch }: SectionProps) {
                     invalid={hasCode(list, 'other-label-empty', 'other-label-bracket', 'other-label-is-party', 'other-label-shared')}
                     aria-label={`Role label of entry ${place + 1}`}
                     placeholder="ROLE LABEL"
-                    className="w-40"
+                    data-field="label"
+                    width="w-40"
                   />
                   {showOwner && (
                     <label className="flex items-center gap-2 whitespace-nowrap text-xs text-ink-muted">
@@ -66,7 +67,8 @@ export function Others({ form, problems, dispatch }: SectionProps) {
                         options={[{ value: NO_OWNER, label: 'No owner' }, ...(other.unknownOf !== undefined && !owner ? [{ value: UNKNOWN_OWNER, label: 'Not in the list' }] : []), ...owners]}
                         onChange={(value) => value !== UNKNOWN_OWNER && patch({ ownerId: value === NO_OWNER ? null : value })}
                         invalid={hasCode(list, 'of-self', 'of-missing', 'of-owner-type', 'of-owner-has-of')}
-                        className="w-48"
+                        data-field="owner"
+                        width="w-48"
                       />
                     </label>
                   )}

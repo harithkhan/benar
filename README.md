@@ -11,9 +11,11 @@ The form has these parts: the save target, the parties, their addresses, emails 
 - **No real data.** The files that this tool writes hold real client names. No real name, path or file goes into this repository, a test, a screenshot or a commit message. The tests use one invented example only.
 - **No network.** The app makes no request. It has no telemetry and no update check. The session cancels each request that is not for the app's own files, and the content policy is `default-src 'self'`.
 - **No text in logs.** A log line or an error message names the kind of problem only, never text of the form.
-- **Disk writes.** The app writes one file only: the one that you save. It keeps no draft, no recent-files list and no app data with form text. The session of the window is in memory only.
+- **Disk writes.** The app writes one file only: the one that you save. It keeps no draft, no recent-files list and no app data with form text. The session of the window is in memory only. macOS keeps the last folder of a file dialog in the preferences of the app. The app removes that entry after each file dialog closes and before the app quits.
 - **Path only for Word files.** The app never opens a Word document. It reads the path and checks that the file exists.
+- **Private source.** The format comes from a private app. No file of this repository names that app.
 - `.gitignore` holds `*.truth.json`, `*.docx`, `node_modules/`, `out/` and `.vite/`.
+- Tests first for `src/shared/`. Never weaken a test to make it pass.
 
 ## Requirements
 

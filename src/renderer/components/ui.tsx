@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from 'react';
 
 import type { Problem } from '../../shared/validate';
 import { MESSAGE } from '../messages';
@@ -7,9 +7,19 @@ import { MESSAGE } from '../messages';
 
 export const cx = (...parts: (string | false | null | undefined)[]): string => parts.filter(Boolean).join(' ');
 
-const FIELD = 'w-full rounded-control border bg-field px-2.5 outline-none placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/35';
+const FIELD = 'rounded-control border bg-field outline-none placeholder:text-ink-faint focus:border-accent focus:ring-2 focus:ring-accent/35';
+
+/** The id of the field of a `Labelled`. A field takes its `id` from here. */
+const LabelFor = createContext<string | undefined>(undefined);
+
+/** The control of a row that a problem is about. The control has this name in `data-field`. */
+export type FieldName = 'folder' | 'name' | 'batch' | 'label' | 'type' | 'fullName' | 'party' | 'owner' | 'text' | 'entity' | 'expect';
 
 interface FieldLook {
+  /** The width of the control. A width class in `className` does not work: the style sheet has `w-full` after it. */
+  width?: `w-${string}`;
+  /** The footer finds the control of a problem with this name. */
+  'data-field'?: FieldName;
   /** Shows the border of an error. */
   invalid?: boolean;
   /** For a path or a number. */
@@ -20,41 +30,43 @@ interface FieldLook {
   compact?: boolean;
 }
 
-const fieldClass = ({ invalid, mono, accent, compact }: FieldLook, size: string, extra?: string): string =>
-  cx(FIELD, invalid ? 'border-danger' : 'border-line-strong', accent ? 'text-accent-text' : 'text-ink', (mono || accent) && 'font-mono', compact || mono || accent ? 'text-sm' : 'text-body', size, extra);
+const fieldClass = ({ width = 'w-full', invalid, mono, accent, compact }: FieldLook, size: string, extra?: string): string =>
+  cx(FIELD, width, invalid ? 'border-danger' : 'border-line-strong', accent ? 'text-accent-text' : 'text-ink', (mono || accent) && 'font-mono', compact || mono || accent ? 'text-sm' : 'text-body', size, extra);
 
 /** A control of one line is 44px tall, and 32px tall in a row of a table. */
 const lineSize = (compact?: boolean): string => (compact ? 'h-8 py-1' : 'h-11 py-2');
 
 type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & FieldLook & { value: string; onChange: (value: string) => void };
 
-export function Input({ value, onChange, invalid, mono, accent, compact, className, ...rest }: InputProps) {
+export function Input({ value, onChange, width, invalid, mono, accent, compact, className, ...rest }: InputProps) {
   return (
     <input
       type="text"
       spellCheck={false}
       autoComplete="off"
+      id={useContext(LabelFor)}
       {...rest}
       value={value}
       aria-invalid={invalid || undefined}
       onChange={(event) => onChange(event.target.value)}
-      className={fieldClass({ invalid, mono, accent, compact }, lineSize(compact), className)}
+      className={fieldClass({ width, invalid, mono, accent, compact }, cx('px-2.5', lineSize(compact)), className)}
     />
   );
 }
 
 type TextAreaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'onChange' | 'value'> & FieldLook & { value: string; onChange: (value: string) => void };
 
-export function TextArea({ value, onChange, invalid, mono, accent, compact, className, ...rest }: TextAreaProps) {
+export function TextArea({ value, onChange, width, invalid, mono, accent, compact, className, ...rest }: TextAreaProps) {
   return (
     <textarea
       rows={2}
       spellCheck={false}
+      id={useContext(LabelFor)}
       {...rest}
       value={value}
       aria-invalid={invalid || undefined}
       onChange={(event) => onChange(event.target.value)}
-      className={fieldClass({ invalid, mono, accent, compact }, cx('min-h-8 resize-y leading-snug', compact ? 'py-1.5' : 'py-2'), className)}
+      className={fieldClass({ width, invalid, mono, accent, compact }, cx('min-h-8 resize-y px-2.5 leading-snug', compact ? 'py-1.5' : 'py-2'), className)}
     />
   );
 }
@@ -72,11 +84,11 @@ interface SelectProps extends FieldLook {
   className?: string;
 }
 
-export function Select({ value, options, onChange, invalid, mono, accent, compact, className, ...rest }: SelectProps) {
+export function Select({ value, options, onChange, width, invalid, mono, accent, compact, className, ...rest }: SelectProps) {
   // A loaded file can hold a value that is not permitted. It shows as it is.
   const known = options.some((option) => option.value === value);
   return (
-    <select {...rest} value={value} aria-invalid={invalid || undefined} onChange={(event) => onChange(event.target.value)} className={fieldClass({ invalid, mono, accent, compact }, lineSize(compact), cx('pr-7', className))}>
+    <select id={useContext(LabelFor)} {...rest} value={value} aria-invalid={invalid || undefined} onChange={(event) => onChange(event.target.value)} className={fieldClass({ width, invalid, mono, accent, compact }, cx('pl-2.5 pr-7', lineSize(compact)), className)}>
       {!known && <option value={value}>{value === '' ? 'Not selected' : `${value} · not permitted`}</option>}
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -87,15 +99,20 @@ export function Select({ value, options, onChange, invalid, mono, accent, compac
   );
 }
 
-/** A label above a control, with an optional hint. */
+/**
+ * A label above one field, with an optional hint. The label names its field
+ * with an id: with no `for`, a label is for its first control, and that can
+ * be a button.
+ */
 export function Labelled({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
+  const id = useId();
   return (
-    <label className={cx('block min-w-0', className)}>
+    <label htmlFor={id} className={cx('block min-w-0', className)}>
       <span className="mb-1.5 flex items-baseline gap-2 text-sm text-ink-muted">
         {label}
         {hint && <span className="text-xs text-ink-faint">· {hint}</span>}
       </span>
-      {children}
+      <LabelFor value={id}>{children}</LabelFor>
     </label>
   );
 }
@@ -104,6 +121,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
   /** 32px tall, for a row of a table. */
   compact?: boolean;
+  /** No padding at the sides, for a narrow column. */
+  flush?: boolean;
 };
 
 const BUTTON: Record<NonNullable<ButtonProps['variant']>, string> = {
@@ -113,12 +132,12 @@ const BUTTON: Record<NonNullable<ButtonProps['variant']>, string> = {
   danger: 'border border-danger-line font-semibold text-danger-text hover:bg-danger-soft',
 };
 
-export function Button({ variant = 'secondary', compact, className, ...rest }: ButtonProps) {
+export function Button({ variant = 'secondary', compact, flush, className, ...rest }: ButtonProps) {
   return (
     <button
       type="button"
       {...rest}
-      className={cx('inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-button disabled:cursor-not-allowed', compact ? 'h-8 px-3 text-sm' : 'h-11 px-4 text-body', BUTTON[variant], className)}
+      className={cx('inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-button disabled:cursor-not-allowed', compact ? 'h-8 text-sm' : 'h-11 text-body', flush ? 'px-0' : compact ? 'px-3' : 'px-4', BUTTON[variant], className)}
     />
   );
 }
@@ -168,6 +187,7 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 /** A list of short texts as chips. Enter adds the typed text. */
 export function ChipInput({ values, onChange, label, placeholder = 'Add another…' }: { values: readonly string[]; onChange: (values: string[]) => void; label: string; placeholder?: string }) {
   const [draft, setDraft] = useState('');
+  const labelId = useContext(LabelFor);
   const add = () => {
     const value = draft.trim();
     if (value !== '' && !values.includes(value)) onChange([...values, value]);
@@ -175,10 +195,11 @@ export function ChipInput({ values, onChange, label, placeholder = 'Add another�
   };
   return (
     <div className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-control border border-line-strong bg-field px-2 py-1.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/35">
-      {values.map((value) => (
-        <span key={value} className="inline-flex items-center gap-1 rounded-chip bg-panel-2 py-0.5 pl-2 pr-1 text-sm">
+      {values.map((value, place) => (
+        // A loaded file can have the same text two times. So the key and the remove use the place.
+        <span key={place} className="inline-flex items-center gap-1 rounded-chip bg-panel-2 py-0.5 pl-2 pr-1 text-sm">
           {value}
-          <button type="button" aria-label={`Remove ${value}`} onClick={() => onChange(values.filter((item) => item !== value))} className="rounded-chip px-1 leading-none text-ink-muted hover:text-danger-text">
+          <button type="button" aria-label={`Remove ${value}`} onClick={() => onChange(values.filter((_, n) => n !== place))} className="rounded-chip px-1 leading-none text-ink-muted hover:text-danger-text">
             ×
           </button>
         </span>
@@ -186,6 +207,7 @@ export function ChipInput({ values, onChange, label, placeholder = 'Add another�
       <input
         type="text"
         spellCheck={false}
+        id={labelId}
         aria-label={label}
         value={draft}
         placeholder={placeholder}

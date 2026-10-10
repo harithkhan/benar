@@ -55,7 +55,8 @@ export function Contacts({ list, form, problems, dispatch }: SectionProps & { li
                       options={unknown ? [{ value: `?${row.unknownParty}`, label: `${row.unknownParty} · not in Parties` }, ...partyOptions] : partyOptions}
                       onChange={(value) => dispatch({ type: 'contact', list, id: row.id, patch: { partyId: value === NO_PARTY ? null : value } })}
                       invalid={hasCode(rowProblems, 'contact-unknown-party')}
-                      className="w-36"
+                      data-field="party"
+                      width="w-36"
                     />
                   </label>
                   <RemoveButton label={`Remove ${label}`} onClick={() => dispatch({ type: 'remove', list, id: row.id })} />

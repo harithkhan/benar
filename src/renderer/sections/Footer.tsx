@@ -1,19 +1,56 @@
-import type { Problem } from '../../shared/validate';
-import { Button, FILE_KEY } from '../components/ui';
+import type { Code, Problem } from '../../shared/validate';
+import { Button, FILE_KEY, type FieldName } from '../components/ui';
 
 const plural = (n: number, one: string): string => `${n} ${one}${n === 1 ? '' : 's'}`;
 
-/** Shows the row of a problem and puts the cursor in its control. */
+/** The control that each problem is about. The control has the name in `data-field`. */
+const FIELD_OF: Record<Code, FieldName> = {
+  'party-label-empty': 'label',
+  'party-label-bracket': 'label',
+  'party-label-duplicate': 'label',
+  'party-type': 'type',
+  'party-no-name': 'fullName',
+  'party-label-slug-shared': 'label',
+  'party-label-slug-empty': 'label',
+  'contact-unknown-party': 'party',
+  'other-type': 'type',
+  'of-not-id-type': 'type',
+  'of-self': 'owner',
+  'of-missing': 'owner',
+  'of-owner-type': 'owner',
+  'of-owner-has-of': 'owner',
+  'other-label-empty': 'label',
+  'other-label-bracket': 'label',
+  'other-label-is-party': 'label',
+  'other-label-shared': 'label',
+  'other-label-slug-shared': 'label',
+  'other-label-slug-empty': 'label',
+  'redact-text-empty': 'text',
+  'redact-entity-empty': 'entity',
+  'redact-expect': 'expect',
+  'redact-type': 'type',
+  'redact-duplicate': 'text',
+  'redact-defined-term': 'text',
+  'target-folder-empty': 'folder',
+  'target-name-empty': 'name',
+  'target-name-bad': 'name',
+  'target-folder-missing': 'folder',
+  'no-word-file': 'name',
+  'batch-empty': 'batch',
+};
+
+/** Shows the row of a problem and puts the cursor in the control that the problem is about. */
 export function goToProblem(problem: Problem): void {
   const row = document.getElementById(`row-${problem.rowId ?? FILE_KEY}`);
   if (!row) return;
-  const control = row.querySelector<HTMLElement>('[aria-invalid="true"]') ?? row.querySelector<HTMLElement>('input, textarea, select');
+  const control = row.querySelector<HTMLElement>(`[data-field="${FIELD_OF[problem.code]}"]`) ?? row.querySelector<HTMLElement>('input, textarea, select');
   (control ?? row).scrollIntoView({ block: 'center', behavior: 'smooth' });
   control?.focus({ preventScroll: true });
 }
 
 interface Props {
   problems: readonly Problem[];
+  /** Not given while Save is not available: a save is in progress, or the app does not know the state of the target. */
   onSave?: () => void;
 }
 

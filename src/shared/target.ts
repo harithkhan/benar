@@ -11,9 +11,9 @@ export function cleanStem(name: string): string {
   return ending ? stem.slice(0, -ending.length).trim() : stem;
 }
 
-/** A stem is one file name: it has no path separator. */
+/** A stem is one file name: it has no path separator, no control character, and no space at its start or end. */
 export function isStemValid(stem: string): boolean {
-  return stem !== '' && stem !== '.' && stem !== '..' && !/[/\\\0]/.test(stem);
+  return stem !== '' && stem === stem.trim() && stem !== '.' && stem !== '..' && !/[/\\\u0000-\u001f\u007f]/.test(stem);
 }
 
 function join(folder: string, file: string): string {

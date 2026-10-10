@@ -12,6 +12,8 @@ describe('the save target', () => {
     ['statement.json', 'statement'],
     ['statement.v2', 'statement.v2'],
     ['statement.docx.truth.json', 'statement.docx'],
+    ['statement.truth', 'statement.truth'],
+    ['.truth.json', ''],
     ['', ''],
   ])('the name %j gives the stem %j', (name, stem) => {
     expect(cleanStem(name)).toBe(stem);
@@ -32,6 +34,13 @@ describe('the save target', () => {
   test.each(['', '.', '..', 'a/b', 'a\\b', 'a\0b'])('the stem %j is not valid', (stem) => {
     expect(isStemValid(stem)).toBe(false);
   });
+
+  test.each(['   ', '\u00a0', ' statement', 'statement ', '\tstatement', 'statement\n', 'state\tment', 'state\u001fment', 'state\u007fment'])(
+    'the stem %j has a space at its start or end, or a control character, and is not valid',
+    (stem) => {
+      expect(isStemValid(stem)).toBe(false);
+    },
+  );
 
   test('a usual stem is valid', () => {
     expect(isStemValid('statement of claim (2)')).toBe(true);

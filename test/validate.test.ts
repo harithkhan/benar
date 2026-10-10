@@ -131,6 +131,17 @@ describe('errors', () => {
     expect(problems.map((p) => p.rowId)).toEqual(state.others.map((o) => o.id));
   });
 
+  test('4: two entries share a label that differs in case and spaces, and do not have the same type', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'company', text: 'Siti Enterprise', label: '[ secretary   1 ]' },
+    ]);
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'error', section: 'others', rowId: state.others[0]!.id, code: 'other-label-shared' },
+      { level: 'error', section: 'others', rowId: state.others[1]!.id, code: 'other-label-shared' },
+    ]);
+  });
+
   test('4: two entries share a label and have the same type', () => {
     const state = withOthers([
       { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
@@ -223,6 +234,13 @@ describe('warnings', () => {
     expect(codes(validate(state, TARGET), 'warning')).toEqual(['redact-duplicate']);
   });
 
+  test('the same text with another kind of space is the same text', () => {
+    const state = load();
+    const row = { id: newId(), text: 'Tan\u00a0Ah\tKow', entity: 'x', expect: 'entered', type: '' };
+    state.redact.push(row);
+    expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'redact', rowId: row.id, code: 'redact-duplicate' }]);
+  });
+
   test('a redact text is the defined term of a party', () => {
     const state = load();
     state.redact[4]!.text = 'The  plaintiff';
@@ -237,5 +255,77 @@ describe('warnings', () => {
     const state = load();
     state.parties[1]!.fullName = '';
     expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-no-name' }]);
+  });
+
+  test('two party labels that are not the same label give the same slug', () => {
+    const state = load();
+    state.parties[1]!.label = '[PARTY-A]';
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'warning', section: 'parties', rowId: state.parties[0]!.id, code: 'party-label-slug-shared' },
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-label-slug-shared' },
+    ]);
+  });
+
+  test('a party label and a label of an entry of others give the same slug', () => {
+    const state = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[PARTY-B]' }]);
+    expect(validate(state, TARGET)).toEqual([
+      { level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-label-slug-shared' },
+      { level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-label-slug-shared' },
+    ]);
+  });
+
+  test('two labels of entries of others that are not the same label give the same slug', () => {
+    const state = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'person', text: 'Cik Siti', label: '[secretary  1]' },
+      { type: 'person', text: 'Lim Mei Ling', label: '[SECRETARY-1]' },
+      { type: 'person', text: 'Rajesh a/l Muniandy', label: '[WITNESS 1]' },
+    ]);
+    expect(validate(state, TARGET)).toEqual(
+      state.others.slice(0, 3).map((other) => ({ level: 'warning', section: 'others', rowId: other.id, code: 'other-label-slug-shared' })),
+    );
+  });
+
+  test('labels that are the same label get no warning for the slug', () => {
+    const parties = load();
+    parties.parties[1]!.label = '[party   a]';
+    expect(codes(validate(parties, TARGET), 'warning')).toEqual([]);
+
+    const partyAndOther = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[party a]' }]);
+    expect(codes(validate(partyAndOther, TARGET), 'warning')).toEqual([]);
+
+    const others = withOthers([
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'company', text: 'Siti Enterprise', label: '[ secretary   1 ]' },
+    ]);
+    expect(codes(validate(others, TARGET), 'warning')).toEqual([]);
+  });
+
+  test('a party label with no letter and no digit has an empty slug', () => {
+    const state = load();
+    state.parties[1]!.label = '[#]';
+    expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'parties', rowId: state.parties[1]!.id, code: 'party-label-slug-empty' }]);
+  });
+
+  test('a label of an entry of others with no letter and no digit has an empty slug', () => {
+    const state = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[#]' }]);
+    expect(validate(state, TARGET)).toEqual([{ level: 'warning', section: 'others', rowId: state.others[0]!.id, code: 'other-label-slug-empty' }]);
+  });
+
+  test('two labels with an empty slug do not share a slug', () => {
+    const state = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[?]' }]);
+    state.parties[1]!.label = '[#]';
+    expect(codes(validate(state, TARGET), 'warning')).toEqual(['party-label-slug-empty', 'other-label-slug-empty']);
+    expect(codes(validate(state, TARGET), 'error')).toEqual([]);
+  });
+
+  test('a label that is empty or has a bracket inside it gets no warning for an empty slug', () => {
+    const state = withOthers([{ type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' }]);
+    state.parties[0]!.label = '[ ]';
+    state.parties[1]!.label = '[[]';
+    state.others[0]!.label = '[]]';
+    const problems = validate(state, TARGET);
+    expect(codes(problems, 'error')).toEqual(['party-label-empty', 'party-label-bracket', 'other-label-bracket']);
+    expect(codes(problems, 'warning')).toEqual([]);
   });
 });

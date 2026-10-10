@@ -23,23 +23,23 @@ export function Parties({ form, problems, dispatch }: SectionProps) {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <label className="flex items-center gap-2 text-sm text-ink-muted">
                 Label
-                <Input value={party.label} onChange={(label) => patch({ label })} accent invalid={hasCode(list, 'party-label-empty', 'party-label-bracket', 'party-label-duplicate')} className="w-40" />
+                <Input value={party.label} onChange={(label) => patch({ label })} accent invalid={hasCode(list, 'party-label-empty', 'party-label-bracket', 'party-label-duplicate')} data-field="label" width="w-40" />
               </label>
               <label className="flex items-center gap-2 text-sm text-ink-muted">
                 Type
-                <Select value={party.type} options={PARTY_TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'party-type')} className="w-36" />
+                <Select value={party.type} options={PARTY_TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'party-type')} data-field="type" width="w-36" />
               </label>
               <span className="flex-1" />
               <Button variant="ghost" compact onClick={() => dispatch({ type: 'remove', list: 'parties', id: party.id })}>
                 Remove
               </Button>
             </div>
-            <RowProblems list={list} only={['party-label-empty', 'party-label-bracket', 'party-label-duplicate', 'party-type']} />
+            <RowProblems list={list} only={['party-label-empty', 'party-label-bracket', 'party-label-duplicate', 'party-label-slug-shared', 'party-label-slug-empty', 'party-type']} />
 
             <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4">
               <div>
                 <Labelled label="Full name, as written">
-                  <Input value={party.fullName} onChange={(fullName) => patch({ fullName })} />
+                  <Input value={party.fullName} onChange={(fullName) => patch({ fullName })} data-field="fullName" />
                 </Labelled>
                 <RowProblems list={list} only={['party-no-name']} />
               </div>

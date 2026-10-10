@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { app, BrowserWindow, dialog, ipcMain, protocol, session, type IpcMainInvokeEvent, type Session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, protocol, session, systemPreferences, type IpcMainInvokeEvent, type OpenDialogOptions, type Session } from 'electron';
 
 import { CHANNEL } from '../shared/bridge';
 import { splitPath } from '../shared/target';
-import { readTruth, saveTruth, targetState } from './files';
+import { pickedTruth, saveTruth, targetState } from './files';
 import { installMenu } from './menu';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
@@ -146,33 +146,48 @@ function fromApp(event: IpcMainInvokeEvent): boolean {
 
 const isText = (value: unknown): value is string => typeof value === 'string';
 
+// macOS keeps the last folder of a file dialog in the preferences of the app.
+// The path of a folder can hold a client name, so the app removes these keys.
+const DIALOG_FOLDER_KEYS = ['NSNavLastRootDirectory', 'NSOSPLastRootDirectory'];
+/** The folder of the last pick. In memory only: the next dialog starts there. */
+let lastFolder: string | undefined;
+
+function forgetDialogFolder(): void {
+  for (const key of DIALOG_FOLDER_KEYS) systemPreferences.removeUserDefault(key);
+}
+
+/** A Mac file dialog. It gives the picked path, or `null`. */
+async function pick(window: BrowserWindow, options: OpenDialogOptions): Promise<string | null> {
+  const result = await dialog.showOpenDialog(window, lastFolder === undefined ? options : { ...options, defaultPath: lastFolder });
+  forgetDialogFolder();
+  const picked = result.canceled ? null : (result.filePaths[0] ?? null);
+  if (picked !== null) lastFolder = options.properties?.includes('openDirectory') ? picked : path.dirname(picked);
+  return picked;
+}
+
 function serveBridge(): void {
   ipcMain.handle(CHANNEL.pickFolder, async (event) => {
     if (!fromApp(event) || !mainWindow) return null;
-    const result = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
-    return result.canceled ? null : (result.filePaths[0] ?? null);
+    return pick(mainWindow, { properties: ['openDirectory', 'createDirectory'] });
   });
 
   // The path only: the app does not open the Word file.
   ipcMain.handle(CHANNEL.pickWordFile, async (event) => {
     if (!fromApp(event) || !mainWindow) return null;
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const file = await pick(mainWindow, {
       properties: ['openFile'],
       filters: [{ name: 'Word documents', extensions: ['docx'] }],
     });
-    const file = result.filePaths[0];
-    return result.canceled || !file ? null : splitPath(file);
+    return file === null ? null : splitPath(file);
   });
 
   ipcMain.handle(CHANNEL.openTruth, async (event) => {
     if (!fromApp(event) || !mainWindow) return null;
-    const result = await dialog.showOpenDialog(mainWindow, {
+    const file = await pick(mainWindow, {
       properties: ['openFile'],
       filters: [{ name: 'Ground-truth files', extensions: ['json'] }],
     });
-    const file = result.filePaths[0];
-    if (result.canceled || !file) return null;
-    return (await readTruth(file)) ?? { ...splitPath(file), json: null };
+    return file === null ? null : pickedTruth(file);
   });
 
   ipcMain.handle(CHANNEL.targetState, async (event, folder: unknown, stem: unknown) => {
@@ -191,6 +206,7 @@ function serveBridge(): void {
 }
 
 void app.whenReady().then(() => {
+  forgetDialogFolder(); // An earlier run or a crash can leave an entry.
   // The window uses this session only. The default session gets no request, and it permits none.
   session.defaultSession.webRequest.onBeforeRequest((_details, callback) => callback({ cancel: true }));
   const appSession = session.fromPartition(PARTITION);
@@ -202,3 +218,4 @@ void app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', forgetDialogFolder);

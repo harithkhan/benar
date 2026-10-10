@@ -219,6 +219,39 @@ describe('Add rows from intake', () => {
     expect(idsOf(b)).toEqual(idsOf(a));
   });
 
+  test('the ids do not depend on the redact rows that are there', () => {
+    const a = load((file) => {
+      file.redact = [{ text: 'Encik Tan', entity: 'p-tan', expect: 'entered', type: 'party' }];
+    });
+    const b = load((file) => {
+      file.redact = [
+        { text: 'Puan Lim', entity: 'p-lim', expect: 'entered', type: 'party' },
+        { text: 'Kedai Bayu', entity: 'c-bayu', expect: 'entered', type: 'company' },
+      ];
+    });
+    const newRows = (state: FormState) =>
+      fillFromIntake(state)
+        .redact.slice(state.redact.length)
+        .map((row) => [row.text, row.entity]);
+    expect(newRows(a)).toHaveLength(7);
+    expect(newRows(b)).toEqual(newRows(a));
+  });
+
+  test('an entry of others whose owner is not in the list falls back to its own entity', () => {
+    const state = load((file) => {
+      file.intake.parties = [];
+      file.intake.addresses = [];
+      file.intake.phones = [];
+      file.intake.others = [
+        { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+        { type: 'nric', text: '900101-01-1234', of: 0 },
+      ];
+    });
+    state.others = state.others.slice(1);
+    expect(state.others[0]!.ownerId).not.toBeNull();
+    expect(rows(state)).toEqual([['900101-01-1234', 'nric-1', 'entered', 'nric']]);
+  });
+
   test('an empty text gives no row', () => {
     const state = load((file) => {
       file.intake.parties[0].fullName = '  ';
