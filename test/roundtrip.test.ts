@@ -29,6 +29,15 @@ describe('round trip', () => {
     expect(serialise(load(file))).toBe(text(file));
   });
 
+  test('an entry of others with a label and an of does not change', () => {
+    const file = example();
+    file.intake.others = [
+      { type: 'person', text: 'Siti binti Hassan', label: '[SECRETARY 1]' },
+      { type: 'nric', text: '900101-01-1234', label: '[NRIC 1]', of: 0 },
+    ];
+    expect(serialise(load(file))).toBe(text(file));
+  });
+
   test('a file with no batch does not change', () => {
     const file = example();
     delete file.batch;

@@ -28,7 +28,7 @@ export function Parties({ form, problems, dispatch }: SectionProps) {
       {form.parties.length === 0 && <p className={`${PARTY_CARD} text-sm text-ink-faint`}>No party. Add the parties of the matter.</p>}
       {form.parties.length > 0 && (
         <ul className="flex flex-col gap-4">
-          {form.parties.map((party) => {
+          {form.parties.map((party, place) => {
             const list = problems.get(party.id);
             const patch = (change: Partial<Pick<Party, 'label' | 'type' | 'fullName' | 'aliases' | 'idNumber' | 'definedTerm'>>) => dispatch({ type: 'party', id: party.id, patch: change });
             const problemsId = `problems-${party.id}`;
@@ -45,7 +45,7 @@ export function Parties({ form, problems, dispatch }: SectionProps) {
                     <Select value={party.type} options={PARTY_TYPE_OPTIONS} onChange={(type) => patch({ type })} invalid={hasCode(list, 'party-type')} data-field="type" aria-describedby={describedBy(list, 'type', problemsId)} width="w-36" />
                   </label>
                   <span className="flex-1" />
-                  <Button variant="ghost" compact onClick={() => dispatch({ type: 'remove', list: 'parties', id: party.id })}>
+                  <Button variant="ghost" compact onClick={() => dispatch({ type: 'remove', list: 'parties', id: party.id })} aria-label={`Remove party ${place + 1}`}>
                     Remove
                   </Button>
                 </div>

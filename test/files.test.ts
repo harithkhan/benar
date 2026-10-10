@@ -82,6 +82,19 @@ describe('saveTruth', () => {
     expect(await readdir(folder)).toEqual(['statement.truth.json']);
   });
 
+  test('a folder text with spaces around it gives the same file', async () => {
+    const target = path.join(folder, 'statement.truth.json');
+    expect(await saveTruth(`  ${folder} `, 'statement', '{"first":true}\n', false)).toEqual({ ok: true });
+    expect(vi.mocked(rename).mock.calls).toEqual([[`${target}.tmp`, target]]);
+    expect(await readdir(folder)).toEqual(['statement.truth.json']);
+    // The file is there for the folder text with the spaces, and for the one without them.
+    expect(await saveTruth(` ${folder}\t`, 'statement', JSON_TEXT, false)).toEqual({ ok: false, reason: 'exists' });
+    expect(await saveTruth(folder, 'statement', JSON_TEXT, false)).toEqual({ ok: false, reason: 'exists' });
+    expect(await saveTruth(` ${folder} `, 'statement', JSON_TEXT, true)).toEqual({ ok: true });
+    expect(await readFile(target, 'utf8')).toBe(JSON_TEXT);
+    expect(await readdir(folder)).toEqual(['statement.truth.json']);
+  });
+
   test.each([false, true])('a save writes the .tmp file, then renames it (replace %j)', async (replace) => {
     const target = path.join(folder, 'statement.truth.json');
     expect(await saveTruth(folder, 'statement', JSON_TEXT, replace)).toEqual({ ok: true });
@@ -180,6 +193,15 @@ describe('targetState', () => {
     expect(await targetState(`${folder}/`, 'statement')).toEqual(await targetState(folder, 'statement'));
     expect(await targetState(`${folder}/`, 'statement')).toEqual({ folderExists: true, truthExists: true, wordFileExists: true });
     expect(await targetState(`${folder}/`, 'other')).toEqual({ folderExists: true, truthExists: false, wordFileExists: false });
+  });
+
+  test('a folder text with spaces around it gives the same state', async () => {
+    expect(await targetState(` ${folder} `, 'statement')).toEqual({ folderExists: true, truthExists: false, wordFileExists: false });
+    await saveTruth(folder, 'statement', JSON_TEXT, false);
+    expect(await targetState(` ${folder} `, 'statement')).toEqual({ folderExists: true, truthExists: true, wordFileExists: false });
+    await writeFile(path.join(folder, 'statement.docx'), '');
+    expect(await targetState(`  ${folder}\t`, 'statement')).toEqual(await targetState(folder, 'statement'));
+    expect(await targetState(` ${folder} `, 'statement')).toEqual({ folderExists: true, truthExists: true, wordFileExists: true });
   });
 
   test('an empty folder text or an empty name', async () => {

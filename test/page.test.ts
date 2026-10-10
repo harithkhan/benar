@@ -7,7 +7,7 @@ import { parse } from '../src/shared/parse';
 import { serialise } from '../src/shared/serialise';
 import { validate, type Code, type TargetInfo } from '../src/shared/validate';
 import { App, byRow } from '../src/renderer/App';
-import { FILE_KEY } from '../src/renderer/components/ui';
+import { ChipInput, Dialog, FILE_KEY, Toast } from '../src/renderer/components/ui';
 import { AlwaysKeep } from '../src/renderer/sections/AlwaysKeep';
 import { Contacts } from '../src/renderer/sections/Contacts';
 import { FileSection } from '../src/renderer/sections/FileSection';
@@ -370,6 +370,79 @@ describe('the add button of each list', () => {
     const rows = inside(cards[0]!).filter((element) => element.attrs.id?.startsWith('row-'));
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(inside(row).filter((element) => element.tag === 'button').map((button) => button.text)).toEqual(['×']);
+  });
+});
+
+describe('the spoken names of the buttons', () => {
+  /** What a screen reader says for a button: its `aria-label`, else its text. */
+  const spokenName = (button: Element): string => button.attrs['aria-label'] ?? button.text;
+  /** The card with this title. The count after the title does not count. */
+  const cardOf = (elements: Element[], title: string): Element => {
+    const cards = elements.filter((element) => element.tag === 'section' && element.children[0]?.tag === 'header' && inside(element).some((heading) => heading.tag === 'h2' && heading.text.replace(/\d+$/, '') === title));
+    expect(cards).toHaveLength(1);
+    return cards[0]!;
+  };
+
+  test('the six add buttons have six different spoken names, and each starts with + Add', () => {
+    const elements = inside(page(fullForm()));
+    const names = ['Addresses', 'Emails', 'Phones', 'Other people and identifiers', 'Keep', 'Own titles'].map((title) => {
+      const buttons = inside(cardOf(elements, title)).filter((element) => element.tag === 'button' && element.text === '+ Add');
+      expect(buttons).toHaveLength(1);
+      // No text of the form goes in a `title`.
+      expect(buttons[0]!.attrs.title).toBeUndefined();
+      return spokenName(buttons[0]!);
+    });
+    for (const name of names) expect(name.startsWith('+ Add ')).toBe(true);
+    expect(new Set(names).size).toBe(6);
+  });
+
+  test('the Remove buttons of two party cards have two different spoken names, and each starts with Remove', () => {
+    const form = load();
+    const elements = inside(page(form));
+    const names = form.parties.map((party) => {
+      const card = elements.find((element) => element.attrs.id === `row-${party.id}`)!;
+      const buttons = inside(card).filter((element) => element.tag === 'button' && element.text === 'Remove');
+      expect(buttons).toHaveLength(1);
+      expect(buttons[0]!.attrs.title).toBeUndefined();
+      return spokenName(buttons[0]!);
+    });
+    expect(names).toHaveLength(2);
+    for (const name of names) expect(name.startsWith('Remove ')).toBe(true);
+    expect(new Set(names).size).toBe(2);
+  });
+});
+
+describe('the chips of a chip input', () => {
+  const classes = (element: Element): string[] => (element.attrs.class ?? '').split(' ');
+
+  test('the × of each chip names the full text, the text is cut to the box, and the × keeps its width', () => {
+    // A long text, two times: a loaded file can have the same text two times.
+    const value = 'Pejabat Tanah dan Galian Daerah Hulu Langat, Bandar Baru Bangi, Selangor Darul Ehsan';
+    const root = readHtml(renderToStaticMarkup(createElement(ChipInput, { values: [value, value], onChange: () => undefined, label: 'Always keep' })));
+    const buttons = inside(root).filter((element) => element.tag === 'button');
+    expect(buttons.map((button) => button.text)).toEqual(['×', '×']);
+    expect(buttons.map((button) => button.attrs['aria-label'])).toEqual([`Remove ${value}`, `Remove ${value}`]);
+    for (const button of buttons) expect(classes(button)).toContain('shrink-0');
+    const texts = inside(root).filter((element) => element.children.length === 0 && element.text === value);
+    expect(texts).toHaveLength(2);
+    for (const text of texts) expect(classes(text)).toContain('truncate');
+  });
+});
+
+describe('the shadow', () => {
+  // Section 7 of the plan, Tokens: a shadow on dialogs only.
+  const withShadow = (root: Element): string[] => inside(root).flatMap((element) => ((element.attrs.class ?? '').split(' ').includes('shadow-dialog') ? [element.tag] : []));
+  const render = (element: ReturnType<typeof createElement>): Element => readHtml(renderToStaticMarkup(element));
+
+  test('the dialog has the shadow', () => {
+    expect(withShadow(render(createElement(Dialog, { title: 'Replace the file?', onCancel: () => undefined, actions: null, children: 'The file is in this folder already.' })))).toEqual(['dialog']);
+  });
+
+  test('the page and the toast have no shadow', () => {
+    expect(withShadow(page(fullForm()))).toEqual([]);
+    const toast = render(createElement(Toast, { onClose: () => undefined, children: 'Saved statement.truth.json' }));
+    expect(inside(toast).some((element) => element.attrs.role === 'status')).toBe(true);
+    expect(withShadow(toast)).toEqual([]);
   });
 });
 

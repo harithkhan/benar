@@ -199,8 +199,9 @@ export function ChipInput({ values, onChange, label, placeholder = 'Add anotherâ
   return (
     <div
       onMouseDown={(event) => {
-        // Only for the box itself, not for a chip. The input keeps the focus that it has.
-        if (event.target !== event.currentTarget) return;
+        // Not for a button and not for the input: the `Ã—` of a chip does its work, and the input puts its cursor itself.
+        // For the rest of the box, also the text of a chip: the input gets or keeps the focus, and the draft stays.
+        if (!(event.target instanceof Element) || event.target.closest('button, input')) return;
         event.preventDefault();
         input.current?.focus();
       }}
@@ -286,7 +287,7 @@ export function Dialog({ title, children, actions, onCancel }: { title: string; 
 
 export function Toast({ children, actions, onClose }: { children: ReactNode; actions?: ReactNode; onClose: () => void }) {
   return (
-    <div role="status" className="fixed bottom-20 right-5 z-10 flex max-w-[560px] items-center gap-3 rounded-card border border-ok-line bg-ok-soft py-2 pl-4 pr-2 text-sm text-ok-text shadow-dialog">
+    <div role="status" className="fixed bottom-20 right-5 z-10 flex max-w-[560px] items-center gap-3 rounded-card border border-ok-line bg-ok-soft py-2 pl-4 pr-2 text-sm text-ok-text">
       <span className="min-w-0 break-words">{children}</span>
       {actions}
       <RemoveButton label="Close the message" onClick={onClose} />

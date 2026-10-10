@@ -134,6 +134,22 @@ describe('the reducer', () => {
     expect(isDirty(next)).toBe(false);
   });
 
+  test('the next file takes the intake as it is now, also a change that is not saved', () => {
+    // The question before the next file says this: the next file keeps the intake as it is now.
+    const state = opened();
+    const changed = run(state, { type: 'party', id: state.form.parties[0]!.id, patch: { fullName: 'Tan Ah Kau' } });
+    expect(isDirty(changed)).toBe(true);
+    const next = run(changed, { type: 'nextFile' });
+    expect(file(next).intake.parties[0].fullName).toBe('Tan Ah Kau');
+    expect(file(next).redact).toEqual([]);
+  });
+
+  test('after a save with a folder text that has a slash at its end, the form is not dirty', () => {
+    const state = run(opened(), { type: 'folder', value: '/scratch/matter-1/' });
+    const saved = run(state, { type: 'saved', folder: '/scratch/matter-1/', stem: 'statement', json: serialise(state.form), formNo: state.formNo });
+    expect(isDirty(saved)).toBe(false);
+  });
+
   test('a new file from a file of the same matter keeps the same parts', () => {
     const source = opened().form;
     const next = run(initialState(), { type: 'fromMatter', source, folder: '/scratch/matter-1' });

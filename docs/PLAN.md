@@ -158,7 +158,7 @@ A label is compared in this form: trim, remove one `[` at the start and one `]` 
 - `fill.ts`: `Add rows from intake` (below).
 - `target.ts`: the save target. The name field holds a stem. A typed ending `.truth.json`, `.docx` or `.json` is removed. The target is `<folder>/<stem>.truth.json`.
 
-**`Add rows from intake`.** The slug of a label is its inner text in lower case, with each run of other characters than letters and digits as one `-`: `[PARTY A]` gives `party-a`. All new rows have `expect: "entered"`. A text is skipped when it is empty or when a `redact` row has it already (compared as in 4.4). New rows go to the end of the list. The app then says how many rows it added and how many it skipped.
+**`Add rows from intake`.** The slug of a label is its inner text in lower case, with each run of other characters than letters and digits as one `-`, and with no `-` at the start or at the end: `[PARTY A]` gives `party-a`. All new rows have `expect: "entered"`. A text is skipped when it is empty or when a `redact` row has it already (compared as in 4.4). New rows go to the end of the list. The app then says how many rows it added and how many it skipped.
 
 | Source | `entity` | `type` |
 | --- | --- | --- |

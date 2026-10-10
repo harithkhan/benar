@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { appFilePath, isPermitted } from '../src/main/policy';
+import { appFilePath, isFromApp, isPermitted } from '../src/main/policy';
 
 // An invented folder. No test here reads or writes a file.
 const DIR = '/scratch/app/renderer/main_window';
@@ -98,6 +98,65 @@ describe('the file that a request for app://benar/ gets', () => {
 
   test.each(['', 'benar', '/index.html', 'app://'])('a text that is not a URL gets no file: %j', (url) => {
     expect(file(url)).toBeNull();
+  });
+
+  // `app:` is not a special scheme, so the URL parser of Node gives an empty
+  // path here, and not `/`. The file would be the renderer folder itself.
+  test.each(['app://benar', 'app://benar/..'])('%s has an empty path and gets no file', (url) => {
+    expect(new URL(url).pathname).toBe('');
+    expect(file(url)).toBeNull();
+  });
+});
+
+describe('the page that can call the bridge', () => {
+  const DEV = 'http://localhost:5173';
+
+  test.each(['app://benar/index.html', 'app://benar/'])('the page of the app, packaged and in pnpm start: %s', (url) => {
+    expect(isFromApp(url, undefined)).toBe(true);
+    expect(isFromApp(url, DEV)).toBe(true);
+  });
+
+  test.each(['http://localhost:5173', 'http://localhost:5173/', 'http://localhost:5173/index.html', 'http://localhost:5173/index.html?x=1#top'])('in pnpm start, a page of the dev server: %s', (url) => {
+    expect(isFromApp(url, DEV)).toBe(true);
+  });
+
+  test('a dev URL with a slash at its end, or with a path, names the same origin', () => {
+    expect(isFromApp('http://localhost:5173/index.html', 'http://localhost:5173/')).toBe(true);
+    expect(isFromApp('http://localhost:5173/index.html', 'http://localhost:5173/index.html')).toBe(true);
+    expect(isFromApp('http://localhost:5173/other.html', 'http://localhost:5173/index.html')).toBe(true);
+    expect(isFromApp('http://localhost:5174/index.html', 'http://localhost:5173/')).toBe(false);
+  });
+
+  test('packaged: with no dev URL, the page of the app only', () => {
+    expect(isFromApp('http://localhost:5173/', undefined)).toBe(false);
+    expect(isFromApp('http://localhost:5173/', '')).toBe(false);
+    expect(isFromApp('app://benar/index.html', '')).toBe(true);
+  });
+
+  // F6: the check was `startsWith`, and these two texts start with the dev URL.
+  test.each(['http://localhost:51730/', 'http://localhost:5173.example.com/'])('a text that starts with the dev URL is not the page of the app: %s', (url) => {
+    expect(isFromApp(url, DEV)).toBe(false);
+  });
+
+  test.each(['http://localhost:5174/', 'http://localhost/', 'http://127.0.0.1:5173/', 'http://[::1]:5173/', 'http://localhost.example.com:5173/', 'http://localhost:5173@example.com/', 'http://example.com/?http://localhost:5173/'])(
+    'another host is not the page of the app: %s',
+    (url) => {
+      expect(isFromApp(url, DEV)).toBe(false);
+    },
+  );
+
+  test.each(['https://localhost:5173/', 'ws://localhost:5173/', 'app://localhost:5173/', 'blob:http://localhost:5173/0b1f3a2e', 'file:///index.html'])('another scheme is not the page of the app: %s', (url) => {
+    expect(isFromApp(url, DEV)).toBe(false);
+  });
+
+  test.each(['app://BENAR/', 'app://benar.evil/', 'app://evil.benar/', 'app://other/index.html', 'app://benar@other/index.html', 'http://benar/index.html', 'blob:app://benar/index.html', 'devtools://devtools/bundled/inspector.html'])('another page is not the page of the app: %s', (url) => {
+    expect(isFromApp(url, undefined)).toBe(false);
+    expect(isFromApp(url, DEV)).toBe(false);
+  });
+
+  test.each(['', 'benar', '/index.html', 'app://'])('a text that is not a URL is not the page of the app: %j', (url) => {
+    expect(isFromApp(url, undefined)).toBe(false);
+    expect(isFromApp(url, DEV)).toBe(false);
   });
 });
 

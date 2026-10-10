@@ -22,7 +22,7 @@ export function TextList({ list, form, dispatch }: SectionProps & { list: ListNa
       count={rows.length}
       hint={names.hint}
       actions={
-        <Button compact onClick={add}>
+        <Button compact onClick={add} aria-label={`+ Add ${names.one}`}>
           + Add
         </Button>
       }

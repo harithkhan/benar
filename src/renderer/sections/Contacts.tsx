@@ -28,7 +28,7 @@ export function Contacts({ list, form, problems, dispatch }: SectionProps & { li
       count={rows.length}
       hint={list === 'addresses' ? 'Type each address as it stands in the document, with its lines.' : undefined}
       actions={
-        <Button compact onClick={add}>
+        <Button compact onClick={add} aria-label={`+ Add ${names.one}`}>
           + Add
         </Button>
       }

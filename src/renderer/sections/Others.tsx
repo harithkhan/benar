@@ -26,7 +26,7 @@ export function Others({ form, problems, dispatch }: SectionProps) {
       count={form.others.length}
       hint="Children, witnesses, title numbers, case numbers, bank accounts. An ID number can belong to a person of this list."
       actions={
-        <Button compact onClick={add}>
+        <Button compact onClick={add} aria-label="+ Add entry">
           + Add
         </Button>
       }

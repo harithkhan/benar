@@ -48,8 +48,8 @@ export function byRow(problems: readonly Problem[]): ProblemMap {
   return map;
 }
 
-/** A question or a notice in a dialog. */
-type Ask = { kind: 'discard'; then: () => void } | { kind: 'replace' } | { kind: 'notice'; title: string; text: string };
+/** A question or a notice in a dialog. `discard` is the question before New, Open and New from same matter; `next` is the one before the next file. */
+type Ask = { kind: 'discard' | 'next'; then: () => void } | { kind: 'replace' } | { kind: 'notice'; title: string; text: string };
 
 const SAVE_FAILED: Record<Exclude<SaveResult, { ok: true }>['reason'], string> = {
   exists: 'A file with this name is in the folder already.',
@@ -89,15 +89,15 @@ export function App() {
   /**
    * New, Open and the next file do nothing while a save is in progress: the
    * result of the save is for the form that the window has now. They ask first
-   * when the form has unsaved changes.
+   * when the form has unsaved changes. `question` is the question that they ask.
    */
-  const guarded = (action: () => void) => {
+  const guarded = (action: () => void, question: 'discard' | 'next' = 'discard') => {
     const run = () => {
       if (!saveStarted.current) action();
     };
     return () => {
       if (saveStarted.current) return;
-      if (dirty) setAsk({ kind: 'discard', then: run });
+      if (dirty) setAsk({ kind: question, then: run });
       else run();
     };
   };
@@ -143,7 +143,7 @@ export function App() {
     if (picked) replaceForm({ type: 'fromMatter', source: picked.form, folder: picked.folder });
   });
 
-  const nextFile = guarded(() => replaceForm({ type: 'nextFile' }));
+  const nextFile = guarded(() => replaceForm({ type: 'nextFile' }), 'next');
 
   /**
    * Save does not wait for the state of the target: the main process checks
@@ -249,6 +249,29 @@ export function App() {
           }
         >
           The form has changes that are not saved.
+        </Dialog>
+      )}
+
+      {ask?.kind === 'next' && (
+        <Dialog
+          title="Start the next file of this matter?"
+          onCancel={closeAsk}
+          actions={
+            <>
+              <Button onClick={closeAsk}>Cancel</Button>
+              <Button
+                variant="danger"
+                onClick={() => {
+                  closeAsk();
+                  ask.then();
+                }}
+              >
+                Start the next file
+              </Button>
+            </>
+          }
+        >
+          The form has changes that are not saved. The next file keeps the batch, the intake and Always keep as they are now. The rows of Redact, Keep and Own titles are not saved.
         </Dialog>
       )}
 

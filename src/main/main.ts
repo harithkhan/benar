@@ -7,7 +7,7 @@ import { CHANNEL } from '../shared/bridge';
 import { splitPath } from '../shared/target';
 import { pickedTruth, saveTruth, targetState } from './files';
 import { installMenu } from './menu';
-import { appFilePath, isPermitted } from './policy';
+import { appFilePath, isFromApp, isPermitted } from './policy';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string | undefined;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -77,6 +77,13 @@ function blockRequests(appSession: Session): void {
 let mainWindow: BrowserWindow | null = null;
 /** The renderer says when the form has unsaved changes. */
 let dirty = false;
+/**
+ * The number of dialogs of the main process that are open: a file dialog, or
+ * the question before a close. A dialog is a sheet on the window, and the File
+ * menu stays active above it. So while the count is above zero, the menu sends
+ * no command and no second file dialog opens.
+ */
+let openDialogs = 0;
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -103,14 +110,20 @@ function createWindow(): void {
   // The main process asks before the window closes with unsaved changes.
   window.on('close', (event) => {
     if (!dirty) return;
-    const choice = dialog.showMessageBoxSync(window, {
-      type: 'warning',
-      message: 'The form has unsaved changes.',
-      detail: 'If you close the window, the changes are lost.',
-      buttons: ['Cancel', 'Close and lose the changes'],
-      defaultId: 0,
-      cancelId: 0,
-    });
+    openDialogs += 1;
+    let choice: number;
+    try {
+      choice = dialog.showMessageBoxSync(window, {
+        type: 'warning',
+        message: 'The form has unsaved changes.',
+        detail: 'If you close the window, the changes are lost.',
+        buttons: ['Cancel', 'Close and lose the changes'],
+        defaultId: 0,
+        cancelId: 0,
+      });
+    } finally {
+      openDialogs -= 1;
+    }
     if (choice === 0) event.preventDefault();
   });
   window.on('closed', () => {
@@ -121,8 +134,7 @@ function createWindow(): void {
 
 // A call is served only when it comes from the page of the app.
 function fromApp(event: IpcMainInvokeEvent): boolean {
-  const url = event.senderFrame?.url ?? '';
-  return url.startsWith(`${APP_ORIGIN}/`) || (DEV_URL !== undefined && url.startsWith(DEV_URL));
+  return isFromApp(event.senderFrame?.url ?? '', DEV_URL);
 }
 
 const isText = (value: unknown): value is string => typeof value === 'string';
@@ -137,13 +149,19 @@ function forgetDialogFolder(): void {
   for (const key of DIALOG_FOLDER_KEYS) systemPreferences.removeUserDefault(key);
 }
 
-/** A Mac file dialog. It gives the picked path, or `null`. */
+/** A Mac file dialog. It gives the picked path, or `null`. One dialog at a time: a call while one is open gives `null`. */
 async function pick(window: BrowserWindow, options: OpenDialogOptions): Promise<string | null> {
-  const result = await dialog.showOpenDialog(window, lastFolder === undefined ? options : { ...options, defaultPath: lastFolder });
-  forgetDialogFolder();
-  const picked = result.canceled ? null : (result.filePaths[0] ?? null);
-  if (picked !== null) lastFolder = options.properties?.includes('openDirectory') ? picked : path.dirname(picked);
-  return picked;
+  if (openDialogs > 0) return null;
+  openDialogs += 1;
+  try {
+    const result = await dialog.showOpenDialog(window, lastFolder === undefined ? options : { ...options, defaultPath: lastFolder });
+    forgetDialogFolder();
+    const picked = result.canceled ? null : (result.filePaths[0] ?? null);
+    if (picked !== null) lastFolder = options.properties?.includes('openDirectory') ? picked : path.dirname(picked);
+    return picked;
+  } finally {
+    openDialogs -= 1;
+  }
 }
 
 function serveBridge(): void {
@@ -194,7 +212,8 @@ void app.whenReady().then(() => {
   serveAppFiles(appSession);
   blockRequests(appSession);
   serveBridge();
-  installMenu(() => mainWindow);
+  // A command of the File menu goes to no window while a dialog of the main process is open.
+  installMenu(() => (openDialogs > 0 ? null : mainWindow));
   createWindow();
 });
 
