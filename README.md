@@ -60,13 +60,6 @@ This command copies the built app to `/Applications/Benar.app`. If the app does 
 codesign --force --deep --sign - /Applications/Benar.app
 ```
 
-## Workflows
-
-GitHub Actions runs two workflows on a hosted Mac with Apple silicon. They use no secret.
-
-- `.github/workflows/ci.yml` runs on each push and each pull request. It runs the type check and the tests, then it builds the app.
-- `.github/workflows/release.yml` runs on a tag `v<version>` or by hand. The tag must be `v` and the version of `package.json`. It signs the app ad hoc and makes `Benar-<version>-arm64.zip` with its SHA-256. A tag also makes a draft release, which the owner publishes. A run by hand makes the artefact only.
-
 ## Use
 
 1. Select the folder and type the name. `Take from a Word file…` takes the two from the path of a Word file.
