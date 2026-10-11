@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    # Benar is a Mac app for Apple silicon, and `macos-latest` is an Apple
+    # silicon Mac. The repository is public, so the job runs on a hosted
+    # runner, never on a computer of the owner.
+    #
+    # The actions are named by their commit; the comment gives the version.
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      # The type check and the tests do not build the app. This step finds a
+      # change that breaks the Vite build or the package.
+      - run: pnpm package --arch=arm64
+
+      - name: Check that the app is there
+        run: test -d out/Benar-darwin-arm64/Benar.app

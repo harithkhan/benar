@@ -6,6 +6,7 @@
   "private": true,
   "type": "module",
   "main": ".vite/build/main.cjs",
+  "packageManager": "pnpm@12.9.1",
   "engines": {
     "node": ">=22.13.0"
   },
