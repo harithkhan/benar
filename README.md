@@ -77,3 +77,4 @@ codesign --force --deep --sign - /Applications/Benar.app
 | `src/preload/` | The bridge: the six functions that the form can call |
 | `src/renderer/` | The form (React, with the tokens of `tailwind.preset.js`) |
 | `test/` | The tests (Vitest) |
+| `.claude/` | The agents, the skills and the hook that Claude Code sessions of this project use (`CLAUDE.md`, "Working method") |
